@@ -1,0 +1,461 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import {
+  User,
+  Phone,
+  BookOpen,
+  GraduationCap,
+  AlertCircle,
+  ChevronRight,
+} from "lucide-react";
+import {
+  getUniversities,
+  getFaculties,
+  getDepartments,
+  submitOnboarding,
+  saveDraft,
+  getDraft,
+  clearDraft,
+} from "../services/onboarding";
+import type { OnboardingData } from "../types/onboarding";
+
+const steps = ["Personal Info", "University", "Academic Details"];
+
+export const Onboarding = () => {
+  const navigate = useNavigate();
+  const [currentStep, setCurrentStep] = useState(0);
+
+  // Form data
+  const [formData, setFormData] = useState<OnboardingData>({
+    firstname: "",
+    lastname: "",
+    phone: "",
+    university_id: null,
+    faculty_id: null,
+    department_id: null,
+    level: "",
+    role: "student",
+  });
+
+  // Auto-save draft on changes
+  useEffect(() => {
+    if (Object.values(formData).some((v) => v !== "" && v !== null)) {
+      saveDraft(formData);
+    }
+  }, [formData]);
+
+  // Load draft on mount
+  useEffect(() => {
+    const draft = getDraft();
+    if (draft) {
+      setFormData((prev) => ({ ...prev, ...draft }));
+    }
+  }, []);
+
+  // API queries
+  const { data: universities = [] } = useQuery({
+    queryKey: ["universities"],
+    queryFn: getUniversities,
+  });
+
+  const { data: faculties = [] } = useQuery({
+    queryKey: ["faculties", formData.university_id],
+    queryFn: () => getFaculties(formData.university_id as number),
+    enabled: !!formData.university_id,
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ["departments", formData.faculty_id],
+    queryFn: () => getDepartments(formData.faculty_id as number),
+    enabled: !!formData.faculty_id,
+  });
+
+  // Submit mutation
+  const submitMutation = useMutation({
+    mutationFn: submitOnboarding,
+    onSuccess: () => {
+      clearDraft();
+      navigate("/dashboard");
+    },
+  });
+
+  const handleInputChange = (
+    field: keyof OnboardingData,
+    value: string | number | null
+  ) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleNext = () => {
+    if (validateStep()) {
+      if (currentStep < steps.length - 1) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        handleSubmit();
+      }
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const validateStep = (): boolean => {
+    if (currentStep === 0) {
+      // Personal Info validation
+      if (!formData.firstname.trim()) return false;
+      if (!formData.lastname.trim()) return false;
+      if (!formData.phone.trim()) return false;
+      // Basic phone validation
+      if (!/^\+?[1-9]\d{1,14}$/.test(formData.phone.replace(/\s/g, "")))
+        return false;
+      return true;
+    } else if (currentStep === 1) {
+      // University validation
+      if (!formData.university_id) return false;
+      if (!formData.faculty_id) return false;
+      if (!formData.department_id) return false;
+      return true;
+    } else if (currentStep === 2) {
+      // Level validation
+      return !!formData.level;
+    }
+    return false;
+  };
+
+  const handleSubmit = async () => {
+    submitMutation.mutate(formData);
+  };
+
+  const getValidationMessage = (): string | null => {
+    if (currentStep === 0) {
+      if (!formData.firstname.trim()) return "First name is required";
+      if (!formData.lastname.trim()) return "Last name is required";
+      if (!formData.phone.trim()) return "Phone number is required";
+      if (!/^\+?[1-9]\d{1,14}$/.test(formData.phone.replace(/\s/g, ""))) {
+        return "Please enter a valid phone number";
+      }
+    } else if (currentStep === 1) {
+      if (!formData.university_id) return "Please select a university";
+      if (!formData.faculty_id) return "Please select a faculty";
+      if (!formData.department_id) return "Please select a department";
+    } else if (currentStep === 2) {
+      if (!formData.level) return "Please select your level";
+    }
+    return null;
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-azure-500 to-blue-violet-500 rounded-2xl flex items-center justify-center shadow-lg">
+              <GraduationCap className="w-8 h-8 text-white" />
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Complete Your Profile
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Help us personalize your learning experience
+          </p>
+        </div>
+
+        {/* Progress Steps */}
+        <div className="flex justify-between mb-8">
+          {steps.map((step, index) => (
+            <div
+              key={index}
+              className={`flex-1 ${index < steps.length - 1 ? "mr-4" : ""}`}
+            >
+              <div className="flex items-center">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                    index <= currentStep
+                      ? "bg-azure-500 text-white"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                  }`}
+                >
+                  {index + 1}
+                </div>
+                {index < steps.length - 1 && (
+                  <div
+                    className={`flex-1 h-0.5 mx-2 ${
+                      index < currentStep
+                        ? "bg-azure-500"
+                        : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  />
+                )}
+              </div>
+              <p
+                className={`text-xs mt-2 text-center ${
+                  index <= currentStep
+                    ? "text-azure-500 font-semibold"
+                    : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                {step}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Form Card */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
+          {/* Step 1: Personal Info */}
+          {currentStep === 0 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Personal Information
+              </h2>
+
+              {/* First Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  First Name *
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={formData.firstname}
+                    onChange={(e) =>
+                      handleInputChange("firstname", e.target.value)
+                    }
+                    placeholder="Enter your first name"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Last Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Last Name *
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={formData.lastname}
+                    onChange={(e) =>
+                      handleInputChange("lastname", e.target.value)
+                    }
+                    placeholder="Enter your last name"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Phone Number *
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange("phone", e.target.value)}
+                    placeholder="+232 76 123 4567"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: University/Faculty/Department */}
+          {currentStep === 1 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Academic Information
+              </h2>
+
+              {/* University */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  University *
+                </label>
+                <div className="relative">
+                  <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <select
+                    value={formData.university_id || ""}
+                    onChange={(e) => {
+                      handleInputChange(
+                        "university_id",
+                        e.target.value ? Number(e.target.value) : null
+                      );
+                      // Reset dependent fields
+                      handleInputChange("faculty_id", null);
+                      handleInputChange("department_id", null);
+                    }}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
+                  >
+                    <option value="">Select a university</option>
+                    {universities.map((uni) => (
+                      <option key={uni.id} value={uni.id}>
+                        {uni.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Faculty */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Faculty *
+                </label>
+                <div className="relative">
+                  <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <select
+                    value={formData.faculty_id || ""}
+                    onChange={(e) => {
+                      handleInputChange(
+                        "faculty_id",
+                        e.target.value ? Number(e.target.value) : null
+                      );
+                      // Reset department
+                      handleInputChange("department_id", null);
+                    }}
+                    disabled={!formData.university_id}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {formData.university_id
+                        ? "Select a faculty"
+                        : "Select a university first"}
+                    </option>
+                    {faculties.map((faculty) => (
+                      <option key={faculty.id} value={faculty.id}>
+                        {faculty.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Department */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Department *
+                </label>
+                <div className="relative">
+                  <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <select
+                    value={formData.department_id || ""}
+                    onChange={(e) =>
+                      handleInputChange(
+                        "department_id",
+                        e.target.value ? Number(e.target.value) : null
+                      )
+                    }
+                    disabled={!formData.faculty_id}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {formData.faculty_id
+                        ? "Select a department"
+                        : "Select a faculty first"}
+                    </option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Level */}
+          {currentStep === 2 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Study Level
+              </h2>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Academic Level *
+                </label>
+                <div className="relative">
+                  <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <select
+                    value={formData.level}
+                    onChange={(e) => handleInputChange("level", e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
+                  >
+                    <option value="">Select your level</option>
+                    <option value="100">100 Level</option>
+                    <option value="200">200 Level</option>
+                    <option value="300">300 Level</option>
+                    <option value="400">400 Level</option>
+                    <option value="500">500 Level</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Validation Message */}
+          {getValidationMessage() && (
+            <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+              <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                {getValidationMessage()}
+              </p>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {submitMutation.error && (
+            <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {submitMutation.error instanceof Error
+                  ? submitMutation.error.message
+                  : "An error occurred"}
+              </p>
+            </div>
+          )}
+
+          {/* Navigation Buttons */}
+          <div className="flex justify-between mt-8">
+            <button
+              onClick={handleBack}
+              disabled={currentStep === 0}
+              className="px-6 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              Back
+            </button>
+            <button
+              onClick={handleNext}
+              disabled={!validateStep() || submitMutation.isPending}
+              className="px-6 py-2 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
+            >
+              {submitMutation.isPending
+                ? "Submitting..."
+                : currentStep === steps.length - 1
+                ? "Complete"
+                : "Next"}{" "}
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
