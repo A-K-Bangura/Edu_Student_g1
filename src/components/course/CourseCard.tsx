@@ -1,20 +1,95 @@
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Clock, ChevronRight } from "lucide-react";
-import type { Course } from "../../types/dashboard";
+import type { Course, Enrollment } from "../../types/dashboard";
+import { debugLog } from "../../utils/debug";
 
 interface CourseCardProps {
   course: Course;
+  enrollment?: Enrollment;
+  source?: string;
 }
 
-export const CourseCard = ({ course }: CourseCardProps) => {
+export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
   const navigate = useNavigate();
 
-  const handleClick = () => {
-    if (course.is_enrolled) {
-      navigate(`/course/${course.uuid}/play`);
-    } else {
-      navigate(`/course/${course.uuid}`);
+  // Determine if course is enrolled (from enrollment prop or course.is_enrolled)
+  const isEnrolled = !!enrollment || course.is_enrolled;
+
+  // Get progress percentage from enrollment or course.progress
+  const getProgressPercent = (): number => {
+    if (enrollment) {
+      const progress =
+        typeof enrollment.progress_percent === "string"
+          ? parseFloat(enrollment.progress_percent)
+          : enrollment.progress_percent;
+      return progress || 0;
     }
+    if (course.progress) {
+      return course.progress.progress_percent || 0;
+    }
+    return 0;
+  };
+
+  const progressPercent = getProgressPercent();
+
+  // Get lesson count from course metadata or estimated_lessons_count
+  const getLessonCount = (): number => {
+    if (course.meta?.lessons_count) {
+      return course.meta.lessons_count;
+    }
+    if (course.estimated_lessons_count) {
+      return course.estimated_lessons_count;
+    }
+    return 0;
+  };
+
+  // Get estimated hours from course metadata or estimated_duration_hours
+  const getEstimatedHours = (): number => {
+    if (course.meta?.estimated_hours) {
+      return course.meta.estimated_hours;
+    }
+    if (course.estimated_duration_hours) {
+      return course.estimated_duration_hours;
+    }
+    return 0;
+  };
+
+  const handleClick = () => {
+    const hasSavedSpot = Boolean(
+      enrollment?.last_module_id && enrollment?.last_lesson_id
+    );
+
+    const fallbackDestination = isEnrolled
+      ? `/course/${course.uuid}/play`
+      : `/course/${course.uuid}`;
+
+    const resolvedDestination = hasSavedSpot
+      ? `/course/${course.uuid}/module/${enrollment?.last_module_id}/lesson/${enrollment?.last_lesson_id}`
+      : fallbackDestination;
+
+    debugLog("CourseCard", "Course card clicked", {
+      source: source || "unknown",
+      courseId: course.id,
+      courseUuid: course.uuid,
+      title: course.title,
+      isEnrolled,
+      progressPercent,
+      destination: resolvedDestination,
+      hasSavedSpot,
+      lastModuleId: enrollment?.last_module_id,
+      lastLessonId: enrollment?.last_lesson_id,
+    });
+
+    navigate(resolvedDestination, {
+      state: {
+        from: source || "unknown",
+        courseId: course.id,
+        courseUuid: course.uuid,
+        timestamp: new Date().toISOString(),
+        initialModuleId: hasSavedSpot ? enrollment?.last_module_id : undefined,
+        initialLessonId: hasSavedSpot ? enrollment?.last_lesson_id : undefined,
+      },
+    });
   };
 
   return (
@@ -32,11 +107,11 @@ export const CourseCard = ({ course }: CourseCardProps) => {
             (e.target as HTMLImageElement).style.display = "none";
           }}
         />
-        {course.progress && (
+        {isEnrolled && progressPercent > 0 && (
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-700">
             <div
               className="h-full bg-azure-500 transition-all duration-500"
-              style={{ width: `${course.progress.progress_percent}%` }}
+              style={{ width: `${progressPercent}%` }}
             />
           </div>
         )}
@@ -52,28 +127,32 @@ export const CourseCard = ({ course }: CourseCardProps) => {
         </div>
 
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
-          {course.description}
+          {course.short_description || course.description}
         </p>
 
         {/* Meta Info */}
-        <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-          <div className="flex items-center gap-1">
-            <BookOpen className="w-4 h-4" />
-            <span>{course.meta.lessons_count} lessons</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Clock className="w-4 h-4" />
-            <span>{course.meta.estimated_hours}h</span>
-          </div>
-        </div>
-
-        {/* Status Badge */}
-        {course.is_enrolled && course.progress && (
-          <div className="mt-3 inline-block px-3 py-1 bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300 rounded-full text-xs font-medium">
-            In Progress - {Math.round(course.progress.progress_percent)}%
+        {(course.meta ||
+          course.estimated_lessons_count ||
+          course.estimated_duration_hours) && (
+          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-1">
+              <BookOpen className="w-4 h-4" />
+              <span>{getLessonCount()} lessons</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Clock className="w-4 h-4" />
+              <span>{getEstimatedHours()}h</span>
+            </div>
           </div>
         )}
-        {course.is_enrolled && !course.progress && (
+
+        {/* Status Badge */}
+        {isEnrolled && progressPercent > 0 && (
+          <div className="mt-3 inline-block px-3 py-1 bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300 rounded-full text-xs font-medium">
+            In Progress - {Math.round(progressPercent)}%
+          </div>
+        )}
+        {isEnrolled && progressPercent === 0 && (
           <div className="mt-3 inline-block px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-xs font-medium">
             Not Started
           </div>

@@ -3,34 +3,146 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { PageShell } from "../components/layout/PageShell";
 import { QuizRenderer } from "../components/course/QuizRenderer";
+import type { QuizAttemptMeta } from "../components/course/QuizRenderer";
 import { CheckCircle, XCircle, AlertCircle, ArrowRight } from "lucide-react";
-import { getQuiz, submitQuiz } from "../services/quiz";
-import type { QuizSubmission, QuizResult } from "../types/quiz";
+import { getLessonQuizzes } from "../services/quiz";
+import { updateCourseProgress } from "../services/courses";
+import type {
+  QuizSubmission,
+  QuizResult,
+  Quiz,
+  QuizQuestion,
+} from "../types/quiz";
+import { evaluateQuizAnswer } from "../utils/quizValidation";
 
 export const QuizPage = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
   const navigate = useNavigate();
   const [result, setResult] = useState<QuizResult | null>(null);
+  const [selectedQuizIndex, setSelectedQuizIndex] = useState(0);
 
-  // Fetch quiz
-  const { data: quiz, isLoading } = useQuery({
-    queryKey: ["quiz", lessonId],
-    queryFn: () => getQuiz(Number(lessonId!)),
+  // Fetch lesson quizzes
+  const { data: quizzes, isLoading } = useQuery({
+    queryKey: ["lesson-quizzes", lessonId],
+    queryFn: () => getLessonQuizzes(lessonId!),
     enabled: !!lessonId,
   });
 
+  // Get current quiz (first one by default, or selected one)
+  const quiz =
+    quizzes && quizzes.length > 0 ? quizzes[selectedQuizIndex] : null;
+
   // Submit mutation
   const submitMutation = useMutation({
-    mutationFn: (submission: QuizSubmission) =>
-      submitQuiz(quiz!.id, submission),
+    mutationFn: async (submission: QuizSubmission) => {
+      if (!quiz) throw new Error("Quiz not loaded");
+
+      // Normalise questions same as renderer
+      const normaliseQuestions = (q: Quiz): QuizQuestion[] => {
+        if (q.questions && q.questions.length > 0) {
+          return q.questions;
+        }
+        const fallback: QuizQuestion = {
+          id: q.id,
+          text: q.question || "Untitled question",
+          type: ((): QuizQuestion["type"] => {
+            switch (q.quiz_type) {
+              case "multiple_choice":
+                return "mcq";
+              case "multi_select":
+                return "multi_select";
+              case "fill_blank":
+                return "fill_blank";
+              case "one_word":
+                return "one_word";
+              case "short_answer":
+              case "essay":
+                return "short_answer";
+              case "true_false":
+                return "mcq";
+              default:
+                return "mcq";
+            }
+          })(),
+          correct_answer: q.correct_answer,
+          explanation: q.explanation || undefined,
+          points: q.points || 0,
+        };
+        return [fallback];
+      };
+
+      const questions = normaliseQuestions(quiz);
+      const answerMap = new Map<number, string | string[]>();
+      for (const a of submission.answers) {
+        answerMap.set(a.question_id, a.answer);
+      }
+
+      let correct = 0;
+      const breakdown: QuizResult["results"] = questions.map(
+        (qItem): QuizResult["results"][number] => {
+          const yourAnswer = (answerMap.get(qItem.id) ?? "") as
+            | string
+            | string[];
+          const evaluation = evaluateQuizAnswer(quiz, qItem, yourAnswer);
+          if (evaluation.isCorrect) correct += 1;
+          const correctAns = (qItem.correct_answer ?? quiz.correct_answer) as
+            | string
+            | string[];
+          return {
+            question_id: qItem.id,
+            question: qItem.text,
+            your_answer: yourAnswer,
+            correct_answer: correctAns,
+            is_correct: evaluation.isCorrect,
+            explanation: qItem.explanation,
+          };
+        }
+      );
+
+      const total = questions.length;
+      const percentage = Math.round((correct / total) * 100);
+      const passed = percentage >= 50;
+
+      const localResult: QuizResult = {
+        quiz_id: quiz.id,
+        score: correct,
+        percentage,
+        passed,
+        pass_threshold: 50,
+        correct_answers: correct,
+        total_questions: total,
+        xp_awarded: passed ? quiz.xp_reward || 0 : 0,
+        time_taken_seconds: submission.time_spent_seconds,
+        results: breakdown,
+        progress: {
+          total_xp: 0,
+          streak_days: 0,
+        },
+      };
+
+      // Update course progress if possible
+      const courseId = quiz.lesson?.module?.course?.id;
+      if (courseId) {
+        await updateCourseProgress(courseId, {
+          quiz_id: quiz.id,
+          completed: true,
+        });
+      }
+
+      return localResult;
+    },
     onSuccess: (data) => {
       setResult(data);
-      // Invalidate queries to update progress
-      // queryClient.invalidateQueries({ queryKey: ["course-outline"] });
+      // Move to next quiz if available
+      if (quizzes && selectedQuizIndex < quizzes.length - 1) {
+        setSelectedQuizIndex(selectedQuizIndex + 1);
+        setResult(null);
+      }
     },
   });
 
-  const handleSubmit = (submission: QuizSubmission) => {
+  const handleSubmit = (submission: QuizSubmission, meta: QuizAttemptMeta) => {
+    void meta;
     submitMutation.mutate(submission);
   };
 
@@ -129,9 +241,9 @@ export const QuizPage = () => {
                 >
                   <div className="flex items-start gap-3 mb-2">
                     {questionResult.is_correct ? (
-                      <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                      <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
                     ) : (
-                      <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                      <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" />
                     )}
                     <p className="font-medium text-gray-900 dark:text-white">
                       Question {index + 1}: {questionResult.question}
@@ -202,11 +314,41 @@ export const QuizPage = () => {
       <div className="max-w-4xl mx-auto py-8">
         {/* Quiz Header */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6 border border-gray-200 dark:border-gray-700">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            {quiz.title}
-          </h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Quiz Question {selectedQuizIndex + 1} of {quizzes?.length || 0}
+            </h1>
+            {quizzes && quizzes.length > 1 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() =>
+                    setSelectedQuizIndex(Math.max(0, selectedQuizIndex - 1))
+                  }
+                  disabled={selectedQuizIndex === 0}
+                  className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() =>
+                    setSelectedQuizIndex(
+                      Math.min(quizzes.length - 1, selectedQuizIndex + 1)
+                    )
+                  }
+                  disabled={selectedQuizIndex === quizzes.length - 1}
+                  className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
           <p className="text-gray-600 dark:text-gray-400">
-            Answer all questions to complete the quiz
+            {quiz.quiz_type === "multiple_choice"
+              ? "Select the correct answer"
+              : quiz.quiz_type === "true_false"
+              ? "Select True or False"
+              : "Enter your answer"}
           </p>
         </div>
 
@@ -216,7 +358,7 @@ export const QuizPage = () => {
         {/* Error */}
         {submitMutation.error && (
           <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" />
             <p className="text-sm text-red-600 dark:text-red-400">
               {submitMutation.error instanceof Error
                 ? submitMutation.error.message

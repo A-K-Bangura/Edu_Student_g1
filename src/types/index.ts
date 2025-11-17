@@ -1,20 +1,51 @@
 // Common types for the application
 
 export interface User {
-  id: number;
-  uuid: string;
+  id: string | number;
+  uuid?: string;
   email: string;
-  full_name: string;
-  firstname: string;
-  lastname: string;
-  university: string;
-  faculty: string;
-  department: string;
-  level: string;
-  xp_total: number;
-  streak_days: number;
-  status: string;
+  full_name?: string;
+  firstname?: string | null;
+  lastname?: string | null;
+  phone?: string;
+  date_of_birth?: string;
+  gender?: "male" | "female" | "other";
+  student_id?: string;
+  university?: {
+    id: number;
+    name: string;
+    code?: string;
+  };
+  faculty?: {
+    id: number;
+    name: string;
+    code?: string;
+  };
+  department?: {
+    id: number;
+    name: string;
+    code?: string;
+  };
+  level?: string;
+  xp_total?: number;
+  streak_days?: number;
+  current_streak?: number;
+  last_activity_date?: string;
+  status?: string;
   avatar_url?: string;
+  bio?: string;
+  interests?: string[];
+  is_onboarded?: boolean;
+  preferences?: Record<string, unknown>;
+  social_links?: {
+    linkedin?: string;
+    twitter?: string;
+    github?: string;
+    portfolio?: string;
+  };
+  created_at?: string;
+  updated_at?: string;
+  last_login_at?: string;
 }
 
 export interface AuthToken {
@@ -32,7 +63,9 @@ export interface ApiResponse<T = unknown> {
     message: string;
     details?: Record<string, unknown>;
   };
+  error_code?: string;
   timestamp?: string;
+  request_id?: string;
 }
 
 export interface PaginatedResponse<T = unknown> {

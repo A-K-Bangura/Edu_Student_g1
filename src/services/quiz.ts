@@ -1,19 +1,38 @@
 import api from "./api";
 import type { ApiResponse } from "../types";
-import type { Quiz, QuizSubmission, QuizResult } from "../types/quiz";
+import type { Quiz, QuizSubmission, QuizResult, QuizList } from "../types/quiz";
 
-// Get quiz for a lesson
-export const getQuiz = async (lessonId: number): Promise<Quiz> => {
-  const response = await api.get<ApiResponse<Quiz>>(`/quiz/${lessonId}`);
-  if (!response.data.data) {
-    throw new Error("Quiz not found");
+// Get quiz details
+export const getQuiz = async (quizId: string | number): Promise<Quiz> => {
+  const response = await api.get<ApiResponse<{ quiz: Quiz }>>(
+    `/student/quizzes/${quizId}`
+  );
+
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || "Quiz not found");
   }
-  return response.data.data;
+
+  return response.data.data.quiz;
+};
+
+// Get lesson quizzes
+export const getLessonQuizzes = async (
+  lessonId: string | number
+): Promise<QuizList> => {
+  const response = await api.get<ApiResponse<{ quizzes: QuizList }>>(
+    `/student/lessons/${lessonId}/quizzes`
+  );
+
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || "Failed to fetch quizzes");
+  }
+
+  return response.data.data.quizzes;
 };
 
 // Submit quiz answers
 export const submitQuiz = async (
-  quizId: number,
+  quizId: string | number,
   submission: QuizSubmission
 ): Promise<QuizResult> => {
   const response = await api.post<ApiResponse<QuizResult>>(
@@ -21,8 +40,8 @@ export const submitQuiz = async (
     submission
   );
 
-  if (!response.data.data) {
-    throw new Error("Quiz submission failed");
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || "Quiz submission failed");
   }
 
   return response.data.data;

@@ -1,34 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "../services/api";
-import type { ApiResponse } from "../types";
+import {
+  completeLesson,
+  type LessonCompletionData,
+  type LessonCompletionResponse,
+} from "../services/lessons";
 
-interface LessonCompletionData {
+interface CompletionData {
   lessonId: number;
   timeSpentSeconds: number;
   miniLessonProgress: Array<{
     mini_lesson_id: number;
     completed: boolean;
   }>;
-}
-
-interface CompletionResponse {
-  lesson_id: number;
-  completed: boolean;
-  xp_awarded: number;
-  badge_earned: boolean;
-  new_badge?: {
-    id: number;
-    name: string;
-    description: string;
-    icon_url: string;
-  };
-  progress: {
-    total_xp: number;
-    streak_days: number;
-    course_progress_percent: number;
-  };
 }
 
 export const useCompletion = () => {
@@ -44,23 +29,16 @@ export const useCompletion = () => {
   } | null>(null);
 
   const completionMutation = useMutation({
-    mutationFn: async (data: LessonCompletionData) => {
-      const response = await api.post<ApiResponse<CompletionResponse>>(
-        `/student/lessons/${data.lessonId}/complete`,
-        {
-          time_spent_seconds: data.timeSpentSeconds,
-          mini_lesson_progress: data.miniLessonProgress,
-          client_event_id: `lesson-${
-            data.lessonId
-          }-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        }
-      );
+    mutationFn: async (data: CompletionData): Promise<LessonCompletionResponse> => {
+      const completionData: LessonCompletionData = {
+        time_spent_seconds: data.timeSpentSeconds,
+        mini_lesson_progress: data.miniLessonProgress,
+        client_event_id: `lesson-${
+          data.lessonId
+        }-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      };
 
-      if (!response.data.data) {
-        throw new Error("Completion submission failed");
-      }
-
-      return response.data.data;
+      return completeLesson(data.lessonId, completionData);
     },
     onSuccess: (data) => {
       // Update user data in localStorage

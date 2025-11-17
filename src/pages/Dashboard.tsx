@@ -6,22 +6,26 @@ import { Trophy, Flame, BookOpen, Award, ArrowRight } from "lucide-react";
 import { XPCounter } from "../components/common/XPCounter";
 import { StreakIndicator } from "../components/common/StreakIndicator";
 import {
-  getDashboardStats,
+  getDashboard,
   getEnrolledCourses,
-  getRecommendedCourses,
 } from "../services/dashboard";
+import { getRecommendedCourses } from "../services/courses";
 
 export const Dashboard = () => {
   // Get current user
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
-  const firstName = user?.firstname || "Student";
 
-  // Fetch data
-  const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats"],
-    queryFn: getDashboardStats,
+  // Fetch dashboard data
+  const { data: dashboard } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: getDashboard,
+    retry: 1,
   });
+
+  // Use student name from dashboard API or fallback to localStorage
+  const firstName =
+    dashboard?.student?.name?.split(" ")[0] || user?.firstname || "Student";
 
   const { data: enrolledCourses = [] } = useQuery({
     queryKey: ["enrolled-courses"],
@@ -29,14 +33,30 @@ export const Dashboard = () => {
   });
 
   const { data: recommendedCourses = [] } = useQuery({
-    queryKey: ["recommended-courses"],
-    queryFn: getRecommendedCourses,
+    queryKey: [
+      "recommended-courses",
+      user?.department?.id,
+      user?.faculty?.id,
+      user?.university?.id,
+      user?.year_of_study || user?.level,
+    ],
+    queryFn: () =>
+      getRecommendedCourses({
+        department_id: user?.department?.id,
+        faculty_id: user?.faculty?.id,
+        university_id: user?.university?.id,
+        level: user?.year_of_study || user?.level,
+      }),
   });
 
-  // Get current progress course
-  const inProgressCourse = enrolledCourses.find(
-    (course) => course.progress && course.progress.progress_percent < 100
-  );
+  // Get current progress course (from enrollment objects)
+  const inProgressCourse = enrolledCourses.find((enrollment) => {
+    const progressPercent =
+      typeof enrollment.progress_percent === "string"
+        ? parseFloat(enrollment.progress_percent)
+        : enrollment.progress_percent;
+    return progressPercent < 100;
+  });
 
   // Get greeting based on time of day
   const getGreeting = () => {
@@ -71,10 +91,13 @@ export const Dashboard = () => {
               </div>
             </div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-              <XPCounter xp={stats?.xp_total || 0} animate={false} />
+              <XPCounter
+                xp={dashboard?.student?.total_xp || 0}
+                animate={false}
+              />
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Level {stats?.current_level || 1}
+              Level {dashboard?.student?.level || 1}
             </p>
           </div>
 
@@ -86,7 +109,10 @@ export const Dashboard = () => {
               </div>
             </div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-              <StreakIndicator days={stats?.streak_days || 0} size="lg" />
+              <StreakIndicator
+                days={dashboard?.stats?.current_streak || 0}
+                size="lg"
+              />
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Keep it going!
@@ -94,14 +120,16 @@ export const Dashboard = () => {
           </div>
           <StatCard
             title="Courses"
-            value={`${stats?.courses_enrolled || 0} enrolled`}
+            value={`${dashboard?.stats?.enrolled_courses || 0} enrolled`}
             icon={BookOpen}
             color="bg-gradient-to-br from-aquamarine-500 to-azure-500"
-            subtitle={`${stats?.courses_completed || 0} completed`}
+            subtitle={`${dashboard?.stats?.completed_courses || 0} completed`}
           />
           <StatCard
             title="Badges"
-            value={stats?.badges_count || 0}
+            value={
+              dashboard?.stats?.badges_earned || dashboard?.badges?.length || 0
+            }
             icon={Award}
             color="bg-gradient-to-br from-amber-500 to-blue-violet-500"
             subtitle="Achievements unlocked"
@@ -119,7 +147,11 @@ export const Dashboard = () => {
                 View all <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-            <CourseCard course={inProgressCourse} />
+            <CourseCard
+              course={inProgressCourse.course}
+              enrollment={inProgressCourse}
+              source="dashboard-continue"
+            />
           </div>
         )}
 
@@ -135,8 +167,13 @@ export const Dashboard = () => {
           </div>
           {enrolledCourses.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {enrolledCourses.slice(0, 3).map((course) => (
-                <CourseCard key={course.id} course={course} />
+              {enrolledCourses.slice(0, 3).map((enrollment) => (
+                <CourseCard
+                  key={enrollment.id}
+                  course={enrollment.course}
+                  enrollment={enrollment}
+                  source="dashboard-my-courses"
+                />
               ))}
             </div>
           ) : (
@@ -168,7 +205,11 @@ export const Dashboard = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {recommendedCourses.slice(0, 3).map((course) => (
-                <CourseCard key={course.id} course={course} />
+                <CourseCard
+                  key={course.id}
+                  course={course}
+                  source="dashboard-recommended"
+                />
               ))}
             </div>
           </div>

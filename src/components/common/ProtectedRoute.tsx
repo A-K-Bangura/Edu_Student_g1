@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
+import { isAuthenticated } from "../../services/auth";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -12,15 +13,20 @@ export const ProtectedRoute = ({
   requireAuth = true,
   requireOnboarding = false,
 }: ProtectedRouteProps) => {
-  // Check if user is authenticated (has token)
-  const isAuthenticated = !!localStorage.getItem("auth_token");
-  const user = localStorage.getItem("user");
-  const parsedUser = user ? JSON.parse(user) : null;
+  // Check if user is authenticated
+  const authenticated = isAuthenticated();
+
+  // Get user data to check onboarding status
+  const userStr = localStorage.getItem("user");
+  const parsedUser = userStr ? JSON.parse(userStr) : null;
 
   // Check if user has completed onboarding
-  const hasOnboarded = parsedUser?.university && parsedUser?.faculty;
+  const hasOnboarded =
+    parsedUser?.is_onboarded ||
+    (parsedUser?.university && parsedUser?.faculty);
 
-  if (requireAuth && !isAuthenticated) {
+  // Redirect to login if authentication is required but user is not authenticated
+  if (requireAuth && !authenticated) {
     return <Navigate to="/auth/login" replace />;
   }
 

@@ -8,26 +8,35 @@ import {
   GraduationCap,
   AlertCircle,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 import {
   getUniversities,
   getFaculties,
   getDepartments,
-  submitOnboarding,
   saveDraft,
   getDraft,
   clearDraft,
 } from "../services/onboarding";
+import { completeOnboarding } from "../services/auth";
 import type { OnboardingData } from "../types/onboarding";
+import type { CompleteOnboardingData } from "../services/auth";
 
-const steps = ["Personal Info", "University", "Academic Details"];
+const steps = ["Personal Info", "University", "Academic Details", "Account Setup"];
 
 export const Onboarding = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
 
   // Form data
-  const [formData, setFormData] = useState<OnboardingData>({
+  const [formData, setFormData] = useState<OnboardingData & {
+    date_of_birth?: string;
+    gender?: "male" | "female" | "other";
+    student_id?: string;
+    password?: string;
+    password_confirmation?: string;
+    bio?: string;
+  }>({
     firstname: "",
     lastname: "",
     phone: "",
@@ -36,6 +45,12 @@ export const Onboarding = () => {
     department_id: null,
     level: "",
     role: "student",
+    date_of_birth: "",
+    gender: undefined,
+    student_id: "",
+    password: "",
+    password_confirmation: "",
+    bio: "",
   });
 
   // Auto-save draft on changes
@@ -73,7 +88,34 @@ export const Onboarding = () => {
 
   // Submit mutation
   const submitMutation = useMutation({
-    mutationFn: submitOnboarding,
+    mutationFn: async (data: OnboardingData & {
+      date_of_birth?: string;
+      gender?: "male" | "female" | "other";
+      student_id?: string;
+      password?: string;
+      password_confirmation?: string;
+      bio?: string;
+    }) => {
+      // Convert to CompleteOnboardingData format
+      const onboardingData: CompleteOnboardingData = {
+        firstname: data.firstname,
+        lastname: data.lastname,
+        phone: data.phone,
+        level: data.level,
+        password: data.password || "",
+        password_confirmation: data.password_confirmation || "",
+        university_id: data.university_id as number,
+        faculty_id: data.faculty_id as number,
+        department_id: data.department_id as number,
+      };
+
+      if (data.date_of_birth) onboardingData.date_of_birth = data.date_of_birth;
+      if (data.gender) onboardingData.gender = data.gender;
+      if (data.student_id) onboardingData.student_id = data.student_id;
+      if (data.bio) onboardingData.bio = data.bio;
+
+      return completeOnboarding(onboardingData);
+    },
     onSuccess: () => {
       clearDraft();
       navigate("/dashboard");
@@ -81,8 +123,8 @@ export const Onboarding = () => {
   });
 
   const handleInputChange = (
-    field: keyof OnboardingData,
-    value: string | number | null
+    field: keyof OnboardingData | string,
+    value: string | number | null | undefined
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -122,6 +164,11 @@ export const Onboarding = () => {
     } else if (currentStep === 2) {
       // Level validation
       return !!formData.level;
+    } else if (currentStep === 3) {
+      // Account Setup validation
+      if (!formData.password || formData.password.length < 8) return false;
+      if (formData.password !== formData.password_confirmation) return false;
+      return true;
     }
     return false;
   };
@@ -144,6 +191,11 @@ export const Onboarding = () => {
       if (!formData.department_id) return "Please select a department";
     } else if (currentStep === 2) {
       if (!formData.level) return "Please select your level";
+    } else if (currentStep === 3) {
+      if (!formData.password || formData.password.length < 8)
+        return "Password must be at least 8 characters";
+      if (formData.password !== formData.password_confirmation)
+        return "Passwords do not match";
     }
     return null;
   };
@@ -405,6 +457,55 @@ export const Onboarding = () => {
                     <option value="400">400 Level</option>
                     <option value="500">500 Level</option>
                   </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Account Setup */}
+          {currentStep === 3 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Account Setup
+              </h2>
+
+              {/* Password */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Password *
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="password"
+                    value={formData.password || ""}
+                    onChange={(e) =>
+                      handleInputChange("password", e.target.value)
+                    }
+                    placeholder="At least 8 characters"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Confirm Password *
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="password"
+                    value={formData.password_confirmation || ""}
+                    onChange={(e) =>
+                      handleInputChange("password_confirmation", e.target.value)
+                    }
+                    placeholder="Re-enter your password"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                    required
+                  />
                 </div>
               </div>
             </div>

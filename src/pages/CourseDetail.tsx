@@ -24,7 +24,7 @@ export const CourseDetailPage = () => {
   });
 
   const enrollMutation = useMutation({
-    mutationFn: () => enrollInCourse(course!.id),
+    mutationFn: () => enrollInCourse(courseId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["course-detail", courseId] });
       queryClient.invalidateQueries({ queryKey: ["enrolled-courses"] });
@@ -66,14 +66,16 @@ export const CourseDetailPage = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8 border border-gray-200 dark:border-gray-700">
           {/* Thumbnail */}
           <div className="h-64 bg-gradient-to-br from-azure-500 to-blue-violet-500 rounded-lg mb-6 overflow-hidden">
-            <img
-              src={course.thumbnail_url}
-              alt={course.title}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
+            {course.thumbnail_url && (
+              <img
+                src={course.thumbnail_url}
+                alt={course.title}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            )}
           </div>
 
           {/* Title and Meta */}
@@ -92,21 +94,21 @@ export const CourseDetailPage = () => {
               </div>
               <div className="flex items-center gap-2">
                 <BookOpen className="w-5 h-5" />
-                <span>{course.meta.lessons_count} Lessons</span>
+                <span>{course.meta?.lessons_count || 0} Lessons</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5" />
-                <span>{course.meta.estimated_hours}h Estimated</span>
+                <span>{course.meta?.estimated_hours || 0}h Estimated</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-5 h-5" />
-                <span>{course.meta.modules_count} Modules</span>
+                <span>{course.meta?.modules_count || 0} Modules</span>
               </div>
             </div>
           </div>
 
           {/* Enroll Button */}
-          {!course.your_progress?.enrolled && (
+          {!course.is_enrolled && !course.progress && (
             <button
               onClick={handleEnroll}
               disabled={enrollMutation.isPending}
@@ -118,26 +120,25 @@ export const CourseDetailPage = () => {
           )}
 
           {/* Progress */}
-          {course.your_progress?.enrolled && (
+          {course.is_enrolled && course.progress && (
             <div className="bg-gradient-to-br from-azure-50 to-blue-violet-50 dark:from-azure-900/20 dark:to-blue-violet-900/20 p-6 rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                   Your Progress
                 </span>
                 <span className="text-sm font-semibold text-azure-600 dark:text-azure-400">
-                  {Math.round(course.your_progress.progress_percent)}%
+                  {Math.round(course.progress.progress_percentage)}%
                 </span>
               </div>
               <div className="h-2 bg-white dark:bg-gray-700 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-azure-500 to-blue-violet-500 transition-all duration-500"
-                  style={{ width: `${course.your_progress.progress_percent}%` }}
+                  style={{ width: `${course.progress.progress_percentage}%` }}
                 />
               </div>
               <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                {course.your_progress.completed_lessons} of{" "}
-                {course.meta.lessons_count} lessons completed ·{" "}
-                {formatXP(course.your_progress.xp_earned)}
+                {course.progress.completed_lessons} of{" "}
+                {course.meta?.lessons_count || 0} lessons completed
               </div>
             </div>
           )}
@@ -149,45 +150,51 @@ export const CourseDetailPage = () => {
             Course Structure
           </h2>
 
-          {course.modules.map((module, moduleIndex) => (
-            <div key={module.id} className="mb-6 last:mb-0">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <span className="w-8 h-8 bg-azure-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                  {moduleIndex + 1}
-                </span>
-                {module.title}
-              </h3>
-              <div className="ml-12 space-y-2">
-                {module.lessons.map((lesson, lessonIndex) => (
-                  <div
-                    key={lesson.id}
-                    className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      {moduleIndex + 1}.{lessonIndex + 1}
-                    </span>
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                        {lesson.title}
-                      </h4>
-                      <div className="flex items-center gap-4 mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        <span>{lesson.estimated_minutes} min</span>
-                        {lesson.quizzes_count > 0 && (
-                          <span>
-                            {lesson.quizzes_count} quiz
-                            {lesson.quizzes_count > 1 ? "zes" : ""}
-                          </span>
-                        )}
+          {course.modules && course.modules.length > 0 ? (
+            course.modules.map((module, moduleIndex) => (
+              <div key={module.id} className="mb-6 last:mb-0">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <span className="w-8 h-8 bg-azure-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    {moduleIndex + 1}
+                  </span>
+                  {module.title}
+                </h3>
+                <div className="ml-12 space-y-2">
+                  {module.lessons?.map((lesson, lessonIndex) => (
+                    <div
+                      key={lesson.id}
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {moduleIndex + 1}.{lessonIndex + 1}
+                      </span>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                          {lesson.title}
+                        </h4>
+                        <div className="flex items-center gap-4 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          <span>{lesson.estimated_minutes} min</span>
+                          {lesson.quizzes_count > 0 && (
+                            <span>
+                              {lesson.quizzes_count} quiz
+                              {lesson.quizzes_count > 1 ? "zes" : ""}
+                            </span>
+                          )}
+                        </div>
                       </div>
+                      {lesson.is_completed && (
+                        <CheckCircle className="w-5 h-5 text-azure-500 flex-shrink-0" />
+                      )}
                     </div>
-                    {lesson.is_completed && (
-                      <CheckCircle className="w-5 h-5 text-azure-500 flex-shrink-0" />
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="text-gray-600 dark:text-gray-400">
+              Course structure not available
+            </p>
+          )}
         </div>
       </div>
     </PageShell>

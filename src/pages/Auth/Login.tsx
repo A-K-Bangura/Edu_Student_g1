@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { Mail, Lock, AlertCircle } from "lucide-react";
+import { Mail, Lock, AlertCircle, Phone } from "lucide-react";
 
 export const Login = () => {
   const { login, isLoading, error } = useAuth();
+  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -14,12 +16,23 @@ export const Login = () => {
     setLocalError(null);
 
     // Validation
-    if (!email || !password) {
-      setLocalError("Please fill in all fields");
+    if (loginMethod === "email" && !email) {
+      setLocalError("Please enter your email");
+      return;
+    }
+    if (loginMethod === "phone" && !phone) {
+      setLocalError("Please enter your phone number");
+      return;
+    }
+    if (!password) {
+      setLocalError("Please enter your password");
       return;
     }
 
-    login({ email, password });
+    login({
+      [loginMethod]: loginMethod === "email" ? email : phone,
+      password,
+    });
   };
 
   const errorMessage = error instanceof Error ? error.message : localError;
@@ -51,20 +64,64 @@ export const Login = () => {
           </div>
         )}
 
+        {/* Login Method Toggle */}
+        <div className="mb-6 flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+          <button
+            type="button"
+            onClick={() => {
+              setLoginMethod("email");
+              setLocalError(null);
+            }}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              loginMethod === "email"
+                ? "bg-white dark:bg-gray-700 text-azure-500 shadow-sm"
+                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+            }`}
+          >
+            Email
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLoginMethod("phone");
+              setLocalError(null);
+            }}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              loginMethod === "phone"
+                ? "bg-white dark:bg-gray-700 text-azure-500 shadow-sm"
+                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+            }`}
+          >
+            Phone
+          </button>
+        </div>
+
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Email */}
+          {/* Email or Phone */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Email
+              {loginMethod === "email" ? "Email" : "Phone Number"}
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              {loginMethod === "email" ? (
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              ) : (
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              )}
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="student@example.com"
+                type={loginMethod === "email" ? "email" : "tel"}
+                value={loginMethod === "email" ? email : phone}
+                onChange={(e) =>
+                  loginMethod === "email"
+                    ? setEmail(e.target.value)
+                    : setPhone(e.target.value)
+                }
+                placeholder={
+                  loginMethod === "email"
+                    ? "student@example.com"
+                    : "+234 901 234 5678"
+                }
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-azure-500 focus:border-transparent transition-all"
                 disabled={isLoading}
                 required

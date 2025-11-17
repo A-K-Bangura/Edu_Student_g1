@@ -1,125 +1,152 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import {
-  BookOpen,
   Heart,
   Share2,
   Filter,
   AlertCircle,
-  Lock,
+  MessageCircle,
+  User,
 } from "lucide-react";
-import { getFeedPosts, getFeedAccess, toggleLikePost } from "../services/feed";
+import {
+  getFeedPosts,
+  toggleLikePost,
+  sharePost,
+  commentOnPost,
+  getPostDetail,
+} from "../services/feed";
 import { formatRelativeTime } from "../utils/format";
-import type { FeedFilters } from "../types/feed";
+import type { FeedFilters, PostType, PostAuthor } from "../types/feed";
 
 export const Feed = () => {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<FeedFilters>({
-    type: "all",
-    page: 1,
-    per_page: 20,
+    per_page: 15,
   });
-
-  // Check access
-  const { data: access, isLoading: isLoadingAccess } = useQuery({
-    queryKey: ["feed-access"],
-    queryFn: getFeedAccess,
-  });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedComments, setExpandedComments] = useState<
+    Record<number, boolean>
+  >({});
+  const [commentInputs, setCommentInputs] = useState<Record<number, string>>(
+    {}
+  );
+  const [activeAuthor, setActiveAuthor] = useState<PostAuthor | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Fetch posts
   const { data: feedData, isLoading: isLoadingPosts } = useQuery({
     queryKey: ["feed-posts", filters],
     queryFn: () => getFeedPosts(filters),
-    enabled: access?.can_access ?? false,
   });
 
-  // Like mutation
+  // Like mutation with optimistic updates
   const likeMutation = useMutation({
     mutationFn: toggleLikePost,
-    onSuccess: () => {
+    onMutate: async (postId: number) => {
+      await queryClient.cancelQueries({ queryKey: ["feed-posts"] });
+      const previous = queryClient.getQueryData<any>(["feed-posts", filters]);
+      if (previous) {
+        const next = {
+          ...previous,
+          data: previous.data.map((p: any) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  has_liked: !p.has_liked,
+                  likes_count: p.has_liked
+                    ? Math.max(0, (p.likes_count || 0) - 1)
+                    : (p.likes_count || 0) + 1,
+                }
+              : p
+          ),
+        };
+        queryClient.setQueryData(["feed-posts", filters], next);
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(["feed-posts", filters], ctx.previous);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
     },
+  });
+
+  // Share mutation
+  const shareMutation = useMutation({
+    mutationFn: (postId: number) => sharePost(postId),
   });
 
   const handleLike = (postId: number) => {
     likeMutation.mutate(postId);
   };
 
-  const handleFilterChange = (
-    type: "all" | "tip" | "meme" | "announcement"
-  ) => {
-    setFilters((prev) => ({ ...prev, type, page: 1 }));
+  const handleShare = async (post: any) => {
+    const url = post?.slug
+      ? `${window.location.origin}/feed/${post.slug}`
+      : `${window.location.origin}/feed/${post.id}`;
+    try {
+      if ((navigator as any).share) {
+        await (navigator as any).share({
+          url,
+          title: post.title,
+          text: post.content_text,
+        });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+      }
+      shareMutation.mutate(post.id);
+    } catch {
+      // ignore
+    }
   };
 
-  // If locked, show motivational overlay
-  if (!isLoadingAccess && !access?.can_access) {
-    return (
-      <PageShell>
-        <div className="max-w-2xl mx-auto px-4 py-12">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 border border-gray-200 dark:border-gray-700 text-center">
-            <div className="w-24 h-24 bg-gradient-to-br from-amber-500 to-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Lock className="w-12 h-12 text-white" />
-            </div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              Feed Locked 🔒
-            </h1>
-            <p className="text-lg text-gray-600 dark:text-gray-400 mb-6">
-              Complete a lesson to unlock the Feed and access study tips,
-              announcements, and memes!
-            </p>
+  // Add comment mutation
+  const addCommentMutation = useMutation({
+    mutationFn: ({ postId, content }: { postId: number; content: string }) =>
+      commentOnPost(postId, content),
+    onSuccess: (data, variables) => {
+      // update list cache
+      queryClient.setQueryData(["feed-posts", filters], (oldData: any) => {
+        if (!oldData) return oldData;
+        const updated = { ...oldData };
+        updated.data = updated.data.map((p: any) => {
+          if (p.id !== variables.postId) return p;
+          const nextComments = [...(p.comments || []), data.comment];
+          return {
+            ...p,
+            comments: nextComments,
+            comments_count:
+              (p.comments_count || nextComments.length) + (p.comments ? 0 : 0),
+          };
+        });
+        return updated;
+      });
+      // clear input
+      setCommentInputs((s) => ({ ...s, [variables.postId]: "" }));
+    },
+  });
 
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
-              <p className="font-semibold text-amber-900 dark:text-amber-300 mb-2">
-                Unlock Requirements:
-              </p>
-              <ul className="text-sm text-amber-800 dark:text-amber-400 space-y-1 text-left inline-block">
-                <li>• Complete at least 1 lesson in the past 24 hours</li>
-                <li>
-                  • OR earn at least {access?.requirements.min_xp_today || 10}{" "}
-                  XP today
-                </li>
-              </ul>
-            </div>
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFilters((prev) => ({
+      ...prev,
+      search: searchQuery || undefined,
+    }));
+  };
 
-            {access?.current && (
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  Your Progress Today:
-                </p>
-                <div className="flex items-center justify-center gap-6 text-sm">
-                  <div>
-                    <span className="font-semibold text-gray-900 dark:text-white">
-                      {access.current.xp_today}
-                    </span>{" "}
-                    <span className="text-gray-600 dark:text-gray-400">XP</span>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-900 dark:text-white">
-                      {access.current.lessons_today}
-                    </span>{" "}
-                    <span className="text-gray-600 dark:text-gray-400">
-                      Lessons
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => navigate("/courses")}
-              className="inline-flex items-center gap-2 bg-azure-500 hover:bg-azure-600 text-white px-8 py-3 rounded-lg font-semibold transition-colors shadow-lg hover:shadow-xl"
-            >
-              <BookOpen className="w-5 h-5" />
-              Start Learning to Unlock Feed!
-            </button>
-          </div>
-        </div>
-      </PageShell>
-    );
-  }
+  const handleFilterChange = (
+    key: keyof FeedFilters,
+    value: string | boolean | undefined
+  ) => {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: value || undefined,
+    }));
+  };
 
   const posts = feedData?.data || [];
 
@@ -127,33 +154,96 @@ export const Feed = () => {
     <PageShell>
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              Feed
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Stay motivated with tips, memes, and announcements
-            </p>
-          </div>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Feed
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Stay motivated with tips, discussions, and announcements
+          </p>
+        </div>
 
-          {/* Filter */}
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <select
-              value={filters.type || "all"}
-              onChange={(e) =>
-                handleFilterChange(
-                  e.target.value as "all" | "tip" | "meme" | "announcement"
-                )
-              }
-              className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
-            >
-              <option value="all">All Posts</option>
-              <option value="tip">Study Tips</option>
-              <option value="meme">Memes</option>
-              <option value="announcement">Announcements</option>
-            </select>
+        {/* Search and Filters */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8 border border-gray-200 dark:border-gray-700">
+          {/* Search */}
+          <form onSubmit={handleSearch} className="mb-6">
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search posts..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+              />
+              <button
+                type="submit"
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-azure-500 hover:bg-azure-600 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
+              >
+                Search
+              </button>
+            </div>
+          </form>
+
+          {/* Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Type
+              </label>
+              <select
+                value={filters.type || ""}
+                onChange={(e) =>
+                  handleFilterChange(
+                    "type",
+                    e.target.value as PostType | undefined
+                  )
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+              >
+                <option value="">All Types</option>
+                <option value="question">Questions</option>
+                <option value="announcement">Announcements</option>
+                <option value="resource">Resources</option>
+                <option value="discussion">Discussions</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Sort By
+              </label>
+              <select
+                value={filters.sort_by || "created_at"}
+                onChange={(e) =>
+                  handleFilterChange(
+                    "sort_by",
+                    e.target.value as "created_at" | "popularity" | undefined
+                  )
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+              >
+                <option value="created_at">Date Created</option>
+                <option value="popularity">Popularity</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Sort Order
+              </label>
+              <select
+                value={filters.sort_order || "desc"}
+                onChange={(e) =>
+                  handleFilterChange(
+                    "sort_order",
+                    e.target.value as "asc" | "desc" | undefined
+                  )
+                }
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+              >
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -179,33 +269,97 @@ export const Feed = () => {
               >
                 {/* Author */}
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-azure-500 to-blue-violet-500 rounded-full flex items-center justify-center text-white font-semibold">
-                    {post.author.name.charAt(0)}
-                  </div>
+                  <button
+                    className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden flex items-center justify-center"
+                    onClick={() => setActiveAuthor(post.author || null)}
+                    title={
+                      post?.author?.display_name ||
+                      post?.author?.name ||
+                      "Author"
+                    }
+                  >
+                    {post?.author?.avatar_url ? (
+                      <img
+                        src={post.author.avatar_url}
+                        alt={
+                          post?.author?.display_name ||
+                          post?.author?.name ||
+                          "Author"
+                        }
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    ) : (
+                      <User className="w-6 h-6 text-gray-500 rounded-full" />
+                    )}
+                  </button>
                   <div>
-                    <p className="font-semibold text-gray-900 dark:text-white">
-                      {post.author.name}
-                    </p>
+                    <button
+                      onClick={() => setActiveAuthor(post.author || null)}
+                      className="font-semibold text-gray-900 dark:text-white hover:underline"
+                    >
+                      {post?.author?.display_name ||
+                        post?.author?.name ||
+                        "Unknown Author"}
+                    </button>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {post.author.university && `${post.author.university} • `}
-                      {formatRelativeTime(new Date(post.created_at))}
+                      {formatRelativeTime(new Date(post.created_at))} •{" "}
+                      {post.type}
                     </p>
                   </div>
                 </div>
 
                 {/* Content */}
                 <div className="mb-4">
-                  <div
-                    className="prose dark:prose-invert max-w-none"
-                    dangerouslySetInnerHTML={{ __html: post.content_html }}
-                  />
-                  {post.media_url && (
-                    <img
-                      src={post.media_url}
-                      alt="Post media"
-                      className="mt-4 rounded-lg w-full max-h-96 object-cover"
-                      loading="lazy"
+                  {post.title && (
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                      {post.title}
+                    </h3>
+                  )}
+                  {post.content_text && (
+                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {post.content_text}
+                    </p>
+                  )}
+                  {post.content_html && (
+                    <div
+                      className="prose dark:prose-invert max-w-none"
+                      dangerouslySetInnerHTML={{ __html: post.content_html }}
                     />
+                  )}
+                  {post.media_url && (
+                    <div className="mt-4">
+                      <img
+                        src={post.media_url}
+                        alt={post.title || "Post media"}
+                        className="w-full rounded-lg object-cover max-h-96"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                        loading="lazy"
+                      />
+                      {post.media_metadata && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {post.media_metadata.format?.toUpperCase()}
+                          {post.media_metadata.size &&
+                            ` • ${post.media_metadata.size}`}
+                          {post.media_metadata.width &&
+                            post.media_metadata.height &&
+                            ` • ${post.media_metadata.width}×${post.media_metadata.height}`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {post.tags && post.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {post.tags.map((tag, index) => (
+                        <span
+                          key={index}
+                          className="px-2 py-1 bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300 rounded text-sm"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
 
@@ -215,23 +369,145 @@ export const Feed = () => {
                     onClick={() => handleLike(post.id)}
                     disabled={likeMutation.isPending}
                     className={`flex items-center gap-2 transition-colors ${
-                      post.is_liked
+                      post.has_liked
                         ? "text-rose-600 dark:text-rose-400"
                         : "text-gray-600 dark:text-gray-400 hover:text-rose-600 dark:hover:text-rose-400"
                     }`}
                   >
                     <Heart
                       className={`w-5 h-5 ${
-                        post.is_liked ? "fill-current" : ""
+                        post.has_liked ? "fill-current" : ""
                       }`}
                     />
                     <span className="font-medium">{post.likes_count}</span>
                   </button>
-                  <button className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors">
-                    <Share2 className="w-5 h-5" />
-                    <span className="font-medium">Share</span>
+                  <button
+                    onClick={async () => {
+                      const next = !expandedComments[post.id];
+                      setExpandedComments((s) => ({ ...s, [post.id]: next }));
+                      if (
+                        next &&
+                        (!post.comments || post.comments.length === 0)
+                      ) {
+                        try {
+                          const detail = await getPostDetail(post.id);
+                          queryClient.setQueryData(
+                            ["feed-posts", filters],
+                            (oldData: any) => {
+                              if (!oldData) return oldData;
+                              const updated = { ...oldData };
+                              updated.data = updated.data.map((p: any) =>
+                                p.id === post.id
+                                  ? { ...p, comments: detail.comments || [] }
+                                  : p
+                              );
+                              return updated;
+                            }
+                          );
+                        } catch {
+                          // ignore
+                        }
+                      }
+                    }}
+                    className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    <span className="font-medium">
+                      {post.comments_count || post.comments?.length || 0}
+                    </span>
                   </button>
+                  <button
+                    onClick={() => handleShare(post)}
+                    disabled={shareMutation.isPending}
+                    className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-azure-600 dark:hover:text-azure-400 transition-colors"
+                  >
+                    <Share2 className="w-5 h-5" />
+                    <span className="font-medium">
+                      {post.shares_count || 0}
+                    </span>
+                  </button>
+                  {post.views_count !== undefined && (
+                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto">
+                      {post.views_count} views
+                    </span>
+                  )}
                 </div>
+
+                {/* Comments Section */}
+                {expandedComments[post.id] && (
+                  <div className="mt-4 space-y-4">
+                    {post.comments && post.comments.length > 0 ? (
+                      <div className="space-y-3">
+                        {post.comments.map((c) => (
+                          <div key={c.id} className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                              {(c.user as any)?.avatar_url ? (
+                                <img
+                                  src={(c.user as any).avatar_url}
+                                  alt={
+                                    (c.user as any)?.display_name ||
+                                    (c.user as any)?.name ||
+                                    "User"
+                                  }
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <User className="w-4 h-4 text-gray-500" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {(c.user as any)?.display_name ||
+                                  (c.user as any)?.name ||
+                                  `${(c.user as any)?.firstname ?? ""} ${
+                                    (c.user as any)?.lastname ?? ""
+                                  }`.trim() ||
+                                  "User"}
+                              </div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                {c.content}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        No comments yet. Be the first to comment.
+                      </p>
+                    )}
+
+                    <form
+                      className="flex items-center gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const content = (commentInputs[post.id] || "").trim();
+                        if (!content) return;
+                        addCommentMutation.mutate({ postId: post.id, content });
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={commentInputs[post.id] || ""}
+                        onChange={(e) =>
+                          setCommentInputs((s) => ({
+                            ...s,
+                            [post.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="Write a comment..."
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={addCommentMutation.isPending}
+                        className="px-4 py-2 bg-azure-500 text-white rounded-lg hover:bg-azure-600 disabled:opacity-50"
+                      >
+                        Comment
+                      </button>
+                    </form>
+                  </div>
+                )}
               </div>
             ))}
 
@@ -239,12 +515,11 @@ export const Feed = () => {
             {feedData?.meta && feedData.meta.last_page > 1 && (
               <div className="flex justify-center gap-2">
                 <button
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      page: Math.max(1, (prev.page || 1) - 1),
-                    }))
-                  }
+                  onClick={() => {
+                    const newPage = Math.max(1, currentPage - 1);
+                    setCurrentPage(newPage);
+                    // Note: Pagination would need to be added to FeedFilters if needed
+                  }}
                   disabled={feedData.meta?.current_page === 1}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
@@ -254,15 +529,14 @@ export const Feed = () => {
                   {feedData.meta?.current_page} / {feedData.meta?.last_page}
                 </div>
                 <button
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      page: Math.min(
-                        feedData.meta?.last_page || 1,
-                        (prev.page || 1) + 1
-                      ),
-                    }))
-                  }
+                  onClick={() => {
+                    const newPage = Math.min(
+                      feedData.meta?.last_page || 1,
+                      currentPage + 1
+                    );
+                    setCurrentPage(newPage);
+                    // Note: Pagination would need to be added to FeedFilters if needed
+                  }}
                   disabled={
                     feedData.meta?.current_page === feedData.meta?.last_page
                   }
@@ -285,6 +559,89 @@ export const Feed = () => {
           </div>
         )}
       </div>
+
+      {/* Author Modal */}
+      {activeAuthor && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl w-full max-w-md p-6 relative">
+            <button
+              className="absolute top-3 right-3 text-gray-500 hover:text-gray-300"
+              onClick={() => setActiveAuthor(null)}
+            >
+              ✕
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w=14 h-14 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center">
+                {activeAuthor.avatar_url ? (
+                  <img
+                    src={activeAuthor.avatar_url}
+                    alt={
+                      activeAuthor.name ||
+                      (activeAuthor as any)?.display_name ||
+                      "Author"
+                    }
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User className="w-7 h-7 text-gray-500" />
+                )}
+              </div>
+              <div>
+                <div className="font-semibold text-lg text-gray-900 dark:text-white">
+                  {(activeAuthor as any).display_name ||
+                    activeAuthor.name ||
+                    `${(activeAuthor as any).firstname ?? ""} ${
+                      (activeAuthor as any).lastname ?? ""
+                    }`.trim() ||
+                    "Author"}
+                </div>
+                {(activeAuthor as any).role?.name && (
+                  <div className="text-sm text-gray-500">
+                    {(activeAuthor as any).role?.name}
+                  </div>
+                )}
+                {(activeAuthor as any).university?.name && (
+                  <div className="text-sm text-gray-500">
+                    {(activeAuthor as any).university.name}
+                  </div>
+                )}
+              </div>
+            </div>
+            {(activeAuthor as any).bio && (
+              <p className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                {String((activeAuthor as any).bio)}
+              </p>
+            )}
+            {(activeAuthor as any).social_links && (
+              <div className="mt-4 space-y-1 text-sm text-azure-600 dark:text-azure-400">
+                {Object.entries((activeAuthor as any).social_links).map(
+                  ([k, v]) => (
+                    <div key={k} className="truncate">
+                      <span className="font-medium">{k}: </span>
+                      <a
+                        href={String(v)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline"
+                      >
+                        {String(v)}
+                      </a>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+            <div className="mt-4 text-right">
+              <button
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-sm font-medium"
+                onClick={() => setActiveAuthor(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 };

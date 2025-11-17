@@ -17,24 +17,28 @@ export const useAuth = () => {
     },
   });
 
-  // Signup mutation
-  const signupMutation = useMutation({
-    mutationFn: authService.signup,
+  // Send OTP mutation (used for signup)
+  const sendOtpMutation = useMutation({
+    mutationFn: authService.sendOtp,
     onSuccess: () => {
       // Redirect to OTP verification
       navigate("/auth/verify");
     },
     onError: (error: Error) => {
-      console.error("Signup error:", error);
+      console.error("Send OTP error:", error);
     },
   });
 
   // Verify OTP mutation
   const verifyOtpMutation = useMutation({
     mutationFn: authService.verifyOtp,
-    onSuccess: () => {
-      // Redirect to onboarding
-      navigate("/onboarding");
+    onSuccess: (data) => {
+      // Redirect based on onboarding status
+      if (data.requires_onboarding) {
+        navigate("/onboarding");
+      } else {
+        navigate("/dashboard");
+      }
     },
     onError: (error: Error) => {
       console.error("OTP verification error:", error);
@@ -49,14 +53,15 @@ export const useAuth = () => {
 
   return {
     login: loginMutation.mutate,
-    signup: signupMutation.mutate,
+    signup: sendOtpMutation.mutate, // Alias for sendOtp
+    sendOtp: sendOtpMutation.mutate,
     verifyOtp: verifyOtpMutation.mutate,
     logout,
     isLoading:
       loginMutation.isPending ||
-      signupMutation.isPending ||
+      sendOtpMutation.isPending ||
       verifyOtpMutation.isPending,
     error:
-      loginMutation.error || signupMutation.error || verifyOtpMutation.error,
+      loginMutation.error || sendOtpMutation.error || verifyOtpMutation.error,
   };
 };

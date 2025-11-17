@@ -7,6 +7,7 @@ import { ProtectedRoute } from "./components/common/ProtectedRoute";
 import { OfflineIndicator } from "./components/common/OfflineIndicator";
 import { PageShell } from "./components/layout/PageShell";
 import { useUIStore } from "./store/uiStore";
+import { isAuthenticated } from "./services/auth";
 
 // Lazy load pages for code splitting
 const Dashboard = lazy(() =>
@@ -176,9 +177,27 @@ function App() {
                 }
               />
 
-              {/* Default redirect */}
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              {/* Default redirect - check authentication first */}
+              <Route
+                path="/"
+                element={
+                  isAuthenticated() ? (
+                    <Navigate to="/dashboard" replace />
+                  ) : (
+                    <Navigate to="/auth/login" replace />
+                  )
+                }
+              />
+              <Route
+                path="*"
+                element={
+                  isAuthenticated() ? (
+                    <Navigate to="/dashboard" replace />
+                  ) : (
+                    <Navigate to="/auth/login" replace />
+                  )
+                }
+              />
             </Routes>
           </Suspense>
         </BrowserRouter>

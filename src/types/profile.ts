@@ -1,13 +1,57 @@
 export interface UserProfile {
-  id: number;
-  name: string;
+  id: string | number;
+  uuid?: string;
   email: string;
+  firstname?: string | null;
+  lastname?: string | null;
+  full_name?: string;
+  phone?: string;
+  date_of_birth?: string;
+  gender?: "male" | "female" | "other";
+  student_id?: string;
   avatar_url?: string;
-  university?: string;
-  faculty?: string;
-  department?: string;
+  bio?: string;
+  interests?: string[];
+  university?: {
+    id: number;
+    name: string;
+    code?: string;
+    logo_url?: string;
+  };
+  faculty?: {
+    id: number;
+    name: string;
+    code?: string;
+  };
+  department?: {
+    id: number;
+    name: string;
+    code?: string;
+  };
+  level?: string;
+  year_of_study?: string;
+  gpa?: number | null;
+  status?: string;
+  verified_at?: string | null;
+  profile_completion?: number;
+  preferences?: Record<string, unknown>;
+  social_links?: {
+    linkedin?: string;
+    twitter?: string;
+    github?: string;
+    portfolio?: string;
+  } | null;
+  xp_total?: number;
+  streak_days?: number;
+  current_streak?: number;
+  longest_streak?: number;
+  created_at?: string;
+  updated_at?: string;
+  last_login_at?: string;
+  // Legacy fields for backward compatibility
+  name?: string;
   study_level?: string;
-  stats: {
+  stats?: {
     total_xp: number;
     current_streak: number;
     longest_streak: number;
@@ -18,9 +62,31 @@ export interface UserProfile {
     study_time_hours: number;
     level: number;
   };
-  badges: Badge[];
-  achievements: Achievement[];
-  recent_activity: RecentActivity[];
+  badges?: Badge[];
+  achievements?: Achievement[];
+  recent_activity?: RecentActivity[];
+}
+
+export interface UpdateProfileData {
+  firstname?: string;
+  lastname?: string;
+  phone?: string;
+  date_of_birth?: string;
+  gender?: "male" | "female" | "other";
+  bio?: string;
+  interests?: string[];
+  university_id?: number;
+  faculty_id?: number;
+  department_id?: number;
+  student_id?: string;
+  year_of_study?: number;
+  preferences?: Record<string, unknown>;
+  social_links?: {
+    linkedin?: string;
+    twitter?: string;
+    github?: string;
+    portfolio?: string;
+  };
 }
 
 export interface Badge {

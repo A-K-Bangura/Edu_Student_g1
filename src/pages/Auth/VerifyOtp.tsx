@@ -64,19 +64,22 @@ export const VerifyOtp = () => {
       return;
     }
 
+    if (!email) {
+      setLocalError("Email is required");
+      return;
+    }
+
     verifyOtp({
       email,
       otp: otpString,
-      purpose: "signup",
-      user_type: "student",
     });
   };
 
-  const handleResend = () => {
-    if (!canResend) return;
+  const handleResend = async () => {
+    if (!canResend || !email) return;
     setCountdown(60);
     setCanResend(false);
-    // TODO: Implement resend OTP
+    // TODO: Implement resend OTP using sendOtp service
     console.log("Resending OTP to:", email);
   };
 
