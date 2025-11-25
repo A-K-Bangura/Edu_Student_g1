@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import {
   User,
@@ -14,11 +14,8 @@ import {
   TrendingUp,
   LogOut,
 } from "lucide-react";
-import {
-  getUserProfile,
-  updateProfile,
-  updateAvatar,
-} from "../services/profile";
+import { getUserProfile, updateProfile } from "../services/profile";
+import { uploadAvatar } from "../services/upload";
 import {
   getGamificationDashboard,
   getAchievements,
@@ -32,11 +29,24 @@ import { formatRelativeTime } from "../utils/format";
 export const Profile = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<
     "overview" | "badges" | "settings"
   >("overview");
   const { darkMode, toggleDarkMode, lowBandwidthMode, toggleLowBandwidthMode } =
     useUIStore();
+
+  // Handle tab query parameter
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (
+      tabParam === "badges" ||
+      tabParam === "settings" ||
+      tabParam === "overview"
+    ) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
 
   const { data: profile, isLoading: isProfileLoading } = useQuery({
     queryKey: ["user-profile"],
@@ -76,8 +86,11 @@ export const Profile = () => {
   });
 
   const updateAvatarMutation = useMutation({
-    mutationFn: updateAvatar,
+    mutationFn: uploadAvatar,
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      // Also update user in localStorage
       queryClient.invalidateQueries({ queryKey: ["user-profile"] });
     },
   });
@@ -98,29 +111,35 @@ export const Profile = () => {
     // Note: Low bandwidth mode is now handled by UI store, not API
   };
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      const validTypes = [
-        "image/jpeg",
-        "image/jpg",
-        "image/png",
-        "image/gif",
-        "image/webp",
-      ];
-      if (!validTypes.includes(file.type)) {
-        alert("Please select a valid image file (JPEG, PNG, GIF, or WebP)");
-        return;
-      }
+    if (!file) return;
 
-      // Validate file size (max 2MB)
-      if (file.size > 2 * 1024 * 1024) {
-        alert("Image size must be less than 2MB");
-        return;
-      }
+    // Validate file type (only jpeg, png, webp allowed for avatars)
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      alert("Please select a valid image file (JPEG, PNG, or WebP)");
+      return;
+    }
 
+    // Validate file size (max 5MB for Cloudinary upload)
+    const maxSizeBytes = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSizeBytes) {
+      alert("Image size must be less than 5MB");
+      return;
+    }
+
+    // Validate minimum file size
+    if (file.size < 1) {
+      alert("File size must be at least 1 byte");
+      return;
+    }
+
+    try {
       updateAvatarMutation.mutate(file);
+    } catch (error) {
+      console.error("Avatar upload error:", error);
+      alert("Failed to upload avatar. Please try again.");
     }
   };
 
@@ -143,8 +162,8 @@ export const Profile = () => {
     <PageShell>
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Profile Header */}
-        <div className="bg-gradient-to-r from-azure-500 to-blue-violet-500 rounded-lg shadow-md p-8 mb-8">
-          <div className="flex items-center gap-6">
+        <div className="bg-gradient-to-r from-azure-500 to-blue-violet-500 rounded-lg shadow-md p-6 md:p-8 mb-8">
+          <div className="flex flex-col md:flex-row items-center md:items-center gap-6 text-center md:text-left">
             <div className="relative">
               {profile.avatar_url ? (
                 <img
@@ -168,7 +187,7 @@ export const Profile = () => {
                 <Settings className="w-4 h-4 text-gray-700" />
                 <input
                   type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
                   onChange={handleAvatarUpload}
                   className="hidden"
                   disabled={updateAvatarMutation.isPending}
@@ -180,8 +199,8 @@ export const Profile = () => {
                 </div>
               )}
             </div>
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-white mb-2">
+            <div className="flex-1 w-full">
+              <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
                 {profile.full_name ||
                   (profile.firstname && profile.lastname
                     ? `${profile.firstname} ${profile.lastname}`
@@ -212,8 +231,8 @@ export const Profile = () => {
                 )}
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-white text-6xl font-bold">
+            <div className="text-center md:text-right">
+              <div className="text-white text-5xl md:text-6xl font-bold">
                 {gamificationData?.xp_stats?.total_xp
                   ? Math.floor(gamificationData.xp_stats.total_xp / 100)
                   : profile.xp_total

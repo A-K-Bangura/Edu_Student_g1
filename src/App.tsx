@@ -46,6 +46,11 @@ const QuizPage = lazy(() =>
 const Feed = lazy(() =>
   import("./pages/Feed").then((m) => ({ default: m.Feed }))
 );
+const EnrolledCourses = lazy(() =>
+  import("./pages/EnrolledCourses").then((m) => ({
+    default: m.EnrolledCourses,
+  }))
+);
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -117,6 +122,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Courses />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/courses/enrolled"
+                element={
+                  <ProtectedRoute>
+                    <EnrolledCourses />
                   </ProtectedRoute>
                 }
               />

@@ -98,6 +98,16 @@ export interface FeedFilters {
   per_page?: number;
 }
 
+// Feed time related types
+export interface FeedTimeResponse {
+  seconds: number | null;
+  unlimited: boolean;
+}
+
+export interface FeedExchangeResponse {
+  seconds: number;
+}
+
 // Legacy types for backward compatibility
 export interface FeedAccess {
   can_access: boolean;

@@ -14,6 +14,7 @@ import {
   getUniversities,
   getFaculties,
   getDepartments,
+  getOrganizations,
   saveDraft,
   getDraft,
   clearDraft,
@@ -22,27 +23,35 @@ import { completeOnboarding } from "../services/auth";
 import type { OnboardingData } from "../types/onboarding";
 import type { CompleteOnboardingData } from "../services/auth";
 
-const steps = ["Personal Info", "University", "Academic Details", "Account Setup"];
+const steps = [
+  "Personal Info",
+  "Academic Level",
+  "Academic Details",
+  "Account Setup",
+];
 
 export const Onboarding = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
 
   // Form data
-  const [formData, setFormData] = useState<OnboardingData & {
-    date_of_birth?: string;
-    gender?: "male" | "female" | "other";
-    student_id?: string;
-    password?: string;
-    password_confirmation?: string;
-    bio?: string;
-  }>({
+  const [formData, setFormData] = useState<
+    OnboardingData & {
+      date_of_birth?: string;
+      gender?: "male" | "female" | "other";
+      student_id?: string;
+      password?: string;
+      password_confirmation?: string;
+      bio?: string;
+    }
+  >({
     firstname: "",
     lastname: "",
     phone: "",
     university_id: null,
     faculty_id: null,
     department_id: null,
+    organization_id: null,
     level: "",
     role: "student",
     date_of_birth: "",
@@ -74,6 +83,11 @@ export const Onboarding = () => {
     queryFn: getUniversities,
   });
 
+  const { data: organizations = [] } = useQuery({
+    queryKey: ["organizations"],
+    queryFn: getOrganizations,
+  });
+
   const { data: faculties = [] } = useQuery({
     queryKey: ["faculties", formData.university_id],
     queryFn: () => getFaculties(formData.university_id as number),
@@ -86,16 +100,28 @@ export const Onboarding = () => {
     enabled: !!formData.faculty_id,
   });
 
+  // Helper to determine if level requires university/faculty/department
+  const isRegularLevel = (level: string): boolean => {
+    return ["100", "200", "300", "400", "500"].includes(level);
+  };
+
+  // Helper to determine if level is UnderGrad or graduate
+  const isSpecialLevel = (level: string): boolean => {
+    return ["UnderGrad", "graduate"].includes(level);
+  };
+
   // Submit mutation
   const submitMutation = useMutation({
-    mutationFn: async (data: OnboardingData & {
-      date_of_birth?: string;
-      gender?: "male" | "female" | "other";
-      student_id?: string;
-      password?: string;
-      password_confirmation?: string;
-      bio?: string;
-    }) => {
+    mutationFn: async (
+      data: OnboardingData & {
+        date_of_birth?: string;
+        gender?: "male" | "female" | "other";
+        student_id?: string;
+        password?: string;
+        password_confirmation?: string;
+        bio?: string;
+      }
+    ) => {
       // Convert to CompleteOnboardingData format
       const onboardingData: CompleteOnboardingData = {
         firstname: data.firstname,
@@ -104,15 +130,26 @@ export const Onboarding = () => {
         level: data.level,
         password: data.password || "",
         password_confirmation: data.password_confirmation || "",
-        university_id: data.university_id as number,
-        faculty_id: data.faculty_id as number,
-        department_id: data.department_id as number,
       };
 
+      // Add optional fields
       if (data.date_of_birth) onboardingData.date_of_birth = data.date_of_birth;
       if (data.gender) onboardingData.gender = data.gender;
-      if (data.student_id) onboardingData.student_id = data.student_id;
       if (data.bio) onboardingData.bio = data.bio;
+
+      // Add fields based on level type
+      if (isRegularLevel(data.level)) {
+        // For levels 100-500: require university, faculty, department, student_id
+        onboardingData.university_id = data.university_id as number;
+        onboardingData.faculty_id = data.faculty_id as number;
+        onboardingData.department_id = data.department_id as number;
+        if (data.student_id) onboardingData.student_id = data.student_id;
+      } else if (isSpecialLevel(data.level)) {
+        // For UnderGrad/graduate: organization is optional
+        if (data.organization_id) {
+          onboardingData.organization_id = data.organization_id as number;
+        }
+      }
 
       return completeOnboarding(onboardingData);
     },
@@ -156,14 +193,21 @@ export const Onboarding = () => {
         return false;
       return true;
     } else if (currentStep === 1) {
-      // University validation
-      if (!formData.university_id) return false;
-      if (!formData.faculty_id) return false;
-      if (!formData.department_id) return false;
-      return true;
-    } else if (currentStep === 2) {
       // Level validation
       return !!formData.level;
+    } else if (currentStep === 2) {
+      // Academic Details validation (conditional based on level)
+      if (isRegularLevel(formData.level)) {
+        // For levels 100-500: require university, faculty, department
+        if (!formData.university_id) return false;
+        if (!formData.faculty_id) return false;
+        if (!formData.department_id) return false;
+        return true;
+      } else if (isSpecialLevel(formData.level)) {
+        // For UnderGrad/graduate: organization is optional, no validation needed
+        return true;
+      }
+      return false;
     } else if (currentStep === 3) {
       // Account Setup validation
       if (!formData.password || formData.password.length < 8) return false;
@@ -186,11 +230,14 @@ export const Onboarding = () => {
         return "Please enter a valid phone number";
       }
     } else if (currentStep === 1) {
-      if (!formData.university_id) return "Please select a university";
-      if (!formData.faculty_id) return "Please select a faculty";
-      if (!formData.department_id) return "Please select a department";
-    } else if (currentStep === 2) {
       if (!formData.level) return "Please select your level";
+    } else if (currentStep === 2) {
+      if (isRegularLevel(formData.level)) {
+        if (!formData.university_id) return "Please select a university";
+        if (!formData.faculty_id) return "Please select a faculty";
+        if (!formData.department_id) return "Please select a department";
+      }
+      // For UnderGrad/graduate, no validation needed (organization is optional)
     } else if (currentStep === 3) {
       if (!formData.password || formData.password.length < 8)
         return "Password must be at least 8 characters";
@@ -327,113 +374,8 @@ export const Onboarding = () => {
             </div>
           )}
 
-          {/* Step 2: University/Faculty/Department */}
+          {/* Step 2: Level */}
           {currentStep === 1 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Academic Information
-              </h2>
-
-              {/* University */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  University *
-                </label>
-                <div className="relative">
-                  <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <select
-                    value={formData.university_id || ""}
-                    onChange={(e) => {
-                      handleInputChange(
-                        "university_id",
-                        e.target.value ? Number(e.target.value) : null
-                      );
-                      // Reset dependent fields
-                      handleInputChange("faculty_id", null);
-                      handleInputChange("department_id", null);
-                    }}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
-                  >
-                    <option value="">Select a university</option>
-                    {universities.map((uni) => (
-                      <option key={uni.id} value={uni.id}>
-                        {uni.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Faculty */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Faculty *
-                </label>
-                <div className="relative">
-                  <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <select
-                    value={formData.faculty_id || ""}
-                    onChange={(e) => {
-                      handleInputChange(
-                        "faculty_id",
-                        e.target.value ? Number(e.target.value) : null
-                      );
-                      // Reset department
-                      handleInputChange("department_id", null);
-                    }}
-                    disabled={!formData.university_id}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="">
-                      {formData.university_id
-                        ? "Select a faculty"
-                        : "Select a university first"}
-                    </option>
-                    {faculties.map((faculty) => (
-                      <option key={faculty.id} value={faculty.id}>
-                        {faculty.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Department */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Department *
-                </label>
-                <div className="relative">
-                  <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <select
-                    value={formData.department_id || ""}
-                    onChange={(e) =>
-                      handleInputChange(
-                        "department_id",
-                        e.target.value ? Number(e.target.value) : null
-                      )
-                    }
-                    disabled={!formData.faculty_id}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="">
-                      {formData.faculty_id
-                        ? "Select a department"
-                        : "Select a faculty first"}
-                    </option>
-                    {departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Level */}
-          {currentStep === 2 && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 Study Level
@@ -447,18 +389,191 @@ export const Onboarding = () => {
                   <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <select
                     value={formData.level}
-                    onChange={(e) => handleInputChange("level", e.target.value)}
+                    onChange={(e) => {
+                      handleInputChange("level", e.target.value);
+                      // Reset academic fields when level changes
+                      handleInputChange("university_id", null);
+                      handleInputChange("faculty_id", null);
+                      handleInputChange("department_id", null);
+                      handleInputChange("organization_id", null);
+                      handleInputChange("student_id", "");
+                    }}
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
                   >
                     <option value="">Select your level</option>
+                    <option value="UnderGrad">Undergraduate</option>
                     <option value="100">100 Level</option>
                     <option value="200">200 Level</option>
                     <option value="300">300 Level</option>
                     <option value="400">400 Level</option>
                     <option value="500">500 Level</option>
+                    <option value="graduate">Graduate</option>
                   </select>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Step 3: University/Organization (conditional based on level) */}
+          {currentStep === 2 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Academic Information
+              </h2>
+
+              {/* For Regular Levels (100-500): Show University/Faculty/Department/Student ID */}
+              {isRegularLevel(formData.level) && (
+                <>
+                  {/* University */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      University *
+                    </label>
+                    <div className="relative">
+                      <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <select
+                        value={formData.university_id || ""}
+                        onChange={(e) => {
+                          handleInputChange(
+                            "university_id",
+                            e.target.value ? Number(e.target.value) : null
+                          );
+                          // Reset dependent fields
+                          handleInputChange("faculty_id", null);
+                          handleInputChange("department_id", null);
+                        }}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
+                      >
+                        <option value="">Select a university</option>
+                        {universities.map((uni) => (
+                          <option key={uni.id} value={uni.id}>
+                            {uni.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Faculty */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Faculty *
+                    </label>
+                    <div className="relative">
+                      <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <select
+                        value={formData.faculty_id || ""}
+                        onChange={(e) => {
+                          handleInputChange(
+                            "faculty_id",
+                            e.target.value ? Number(e.target.value) : null
+                          );
+                          // Reset department
+                          handleInputChange("department_id", null);
+                        }}
+                        disabled={!formData.university_id}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="">
+                          {formData.university_id
+                            ? "Select a faculty"
+                            : "Select a university first"}
+                        </option>
+                        {faculties.map((faculty) => (
+                          <option key={faculty.id} value={faculty.id}>
+                            {faculty.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Department */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Department *
+                    </label>
+                    <div className="relative">
+                      <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <select
+                        value={formData.department_id || ""}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "department_id",
+                            e.target.value ? Number(e.target.value) : null
+                          )
+                        }
+                        disabled={!formData.faculty_id}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="">
+                          {formData.faculty_id
+                            ? "Select a department"
+                            : "Select a faculty first"}
+                        </option>
+                        {departments.map((dept) => (
+                          <option key={dept.id} value={dept.id}>
+                            {dept.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Student ID */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Student ID
+                    </label>
+                    <div className="relative">
+                      <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={formData.student_id || ""}
+                        onChange={(e) =>
+                          handleInputChange("student_id", e.target.value)
+                        }
+                        placeholder="Enter your student ID (optional)"
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* For UnderGrad/Graduate Levels: Show Organization (optional) */}
+              {isSpecialLevel(formData.level) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Organization (Optional)
+                  </label>
+                  <div className="relative">
+                    <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <select
+                      value={formData.organization_id || ""}
+                      onChange={(e) =>
+                        handleInputChange(
+                          "organization_id",
+                          e.target.value ? Number(e.target.value) : null
+                        )
+                      }
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
+                    >
+                      <option value="">
+                        Select an organization (optional)
+                      </option>
+                      {organizations.map((org) => (
+                        <option key={org.id} value={org.id}>
+                          {org.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    You can optionally associate with an organization
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

@@ -136,7 +136,7 @@ export const QuizRenderer = ({
   }, [quiz.id]);
 
   const currentQuestion = questions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
+  // const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
   // Determine effective type: if mcq but multiple correct answers are allowed, treat as multi_select
   const currentCorrect =
     (currentQuestion.correct_answer ?? quiz.correct_answer) || [];
@@ -165,11 +165,11 @@ export const QuizRenderer = ({
     }
   };
 
-  const handlePrevious = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((index) => index - 1);
-    }
-  };
+  // const handlePrevious = () => {
+  //   if (currentQuestionIndex > 0) {
+  //     setCurrentQuestionIndex((index) => index - 1);
+  //   }
+  // };
 
   const handleSubmit = () => {
     const rawAnswer = answers[currentQuestion.id];
@@ -288,7 +288,7 @@ export const QuizRenderer = ({
   return (
     <div className={className ?? "max-w-3xl mx-auto p-6"}>
       {/* Progress Bar */}
-      <div className="mb-6">
+      {/* <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Question {currentQuestionIndex + 1} of {totalQuestions}
@@ -303,7 +303,7 @@ export const QuizRenderer = ({
             style={{ width: `${progress}%` }}
           />
         </div>
-      </div>
+      </div> */}
 
       {/* Question Card */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 border border-gray-200 dark:border-gray-700 mb-6">
@@ -425,14 +425,14 @@ export const QuizRenderer = ({
       </div>
 
       {/* Navigation Buttons */}
-      <div className="flex justify-between">
-        <button
+      <div className="flex justify-end">
+        {/* <button
           onClick={handlePrevious}
           disabled={currentQuestionIndex === 0 || isSubmitting}
           className="flex items-center gap-2 px-6 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
         >
           Previous
-        </button>
+        </button> */}
 
         <button
           onClick={handleNext}

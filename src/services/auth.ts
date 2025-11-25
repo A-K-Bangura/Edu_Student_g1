@@ -34,13 +34,16 @@ export interface CompleteOnboardingData {
   phone: string;
   date_of_birth?: string;
   gender?: "male" | "female" | "other";
-  level: string;
-  student_id?: string;
+  level: string; // Supports: "UnderGrad", "100", "200", "300", "400", "500", "graduate"
+  student_id?: string; // Required for levels 100-500, optional for UnderGrad/graduate
   password: string;
   password_confirmation: string;
-  university_id: number;
-  faculty_id: number;
-  department_id: number;
+  // For levels 100-500: university_id, faculty_id, department_id are required
+  // For UnderGrad/graduate: organization_id is optional, university/faculty/department are not allowed
+  university_id?: number; // Required for levels 100-500
+  faculty_id?: number; // Required for levels 100-500
+  department_id?: number; // Required for levels 100-500
+  organization_id?: number; // Optional for UnderGrad/graduate levels
   bio?: string;
 }
 

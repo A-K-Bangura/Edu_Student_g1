@@ -4,6 +4,7 @@ import type {
   University,
   Faculty,
   Department,
+  Organization,
   OnboardingData,
   OnboardingResponse,
 } from "../types/onboarding";
@@ -11,6 +12,12 @@ import type {
 // Get all universities
 export const getUniversities = async (): Promise<University[]> => {
   const response = await api.get<ApiResponse<University[]>>("/universities");
+  return response.data.data || [];
+};
+
+// Get all organizations
+export const getOrganizations = async (): Promise<Organization[]> => {
+  const response = await api.get<ApiResponse<Organization[]>>("/organizations");
   return response.data.data || [];
 };
 

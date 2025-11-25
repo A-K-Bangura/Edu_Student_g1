@@ -1,17 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import { StatCard } from "../components/common/StatCard";
 import { CourseCard } from "../components/course/CourseCard";
 import { Trophy, Flame, BookOpen, Award, ArrowRight } from "lucide-react";
 import { XPCounter } from "../components/common/XPCounter";
 import { StreakIndicator } from "../components/common/StreakIndicator";
-import {
-  getDashboard,
-  getEnrolledCourses,
-} from "../services/dashboard";
+import { getDashboard, getEnrolledCourses } from "../services/dashboard";
 import { getRecommendedCourses } from "../services/courses";
 
 export const Dashboard = () => {
+  const navigate = useNavigate();
   // Get current user
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
@@ -143,7 +142,10 @@ export const Dashboard = () => {
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                 Continue Learning
               </h2>
-              <button className="text-azure-500 hover:text-azure-600 flex items-center gap-2 text-sm font-medium">
+              <button
+                onClick={() => navigate("/courses/enrolled")}
+                className="text-azure-500 hover:text-azure-600 flex items-center gap-2 text-sm font-medium"
+              >
                 View all <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -161,7 +163,10 @@ export const Dashboard = () => {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               My Courses
             </h2>
-            <button className="text-azure-500 hover:text-azure-600 flex items-center gap-2 text-sm font-medium">
+            <button
+              onClick={() => navigate("/courses")}
+              className="text-azure-500 hover:text-azure-600 flex items-center gap-2 text-sm font-medium"
+            >
               Browse all <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -185,7 +190,10 @@ export const Dashboard = () => {
               <p className="text-gray-600 dark:text-gray-400 mb-4">
                 Start your learning journey by exploring available courses
               </p>
-              <button className="inline-flex items-center gap-2 bg-azure-500 hover:bg-azure-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+              <button
+                onClick={() => navigate("/courses")}
+                className="inline-flex items-center gap-2 bg-azure-500 hover:bg-azure-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+              >
                 Browse Courses <ArrowRight className="w-5 h-5" />
               </button>
             </div>
@@ -217,7 +225,10 @@ export const Dashboard = () => {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <button className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 text-left">
+          <button
+            onClick={() => navigate("/leaderboard")}
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 text-left"
+          >
             <Trophy className="w-8 h-8 text-azure-500 mb-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               View Leaderboard
@@ -226,7 +237,10 @@ export const Dashboard = () => {
               Check your ranking and compete with others
             </p>
           </button>
-          <button className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 text-left">
+          <button
+            onClick={() => navigate("/profile?tab=badges")}
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 text-left"
+          >
             <Award className="w-8 h-8 text-amber-500 mb-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               View Achievements

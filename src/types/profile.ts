@@ -28,6 +28,11 @@ export interface UserProfile {
     name: string;
     code?: string;
   };
+  organization?: {
+    id: number;
+    name: string;
+    code?: string;
+  } | null;
   level?: string;
   year_of_study?: string;
   gpa?: number | null;
@@ -45,6 +50,10 @@ export interface UserProfile {
   streak_days?: number;
   current_streak?: number;
   longest_streak?: number;
+  last_activity_date?: string | null;
+  badges_count?: number;
+  courses_enrolled?: number;
+  courses_completed?: number;
   created_at?: string;
   updated_at?: string;
   last_login_at?: string;

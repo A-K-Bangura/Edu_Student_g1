@@ -18,6 +18,8 @@ export const getCourses = async (
     params.append("faculty_id", filters.faculty_id.toString());
   if (filters.department_id)
     params.append("department_id", filters.department_id.toString());
+  if (filters.organization_id)
+    params.append("organization_id", filters.organization_id.toString());
   if (filters.level) params.append("level", filters.level);
   if (filters.search) params.append("search", filters.search);
   if (filters.sort_by) params.append("sort_by", filters.sort_by);
@@ -64,15 +66,33 @@ export const getEnrolledCourses = async (): Promise<Enrollment[]> => {
 export const getCourseDetail = async (
   courseId: string | number
 ): Promise<CourseDetail> => {
-  const response = await api.get<ApiResponse<{ course: CourseDetail }>>(
-    `/student/courses/${courseId}`
-  );
+  const response = await api.get<
+    ApiResponse<{
+      course: CourseDetail;
+      is_enrolled?: boolean;
+      progress?: {
+        progress_percentage: number;
+        completed_lessons: number;
+        completed_quizzes: number;
+        is_completed?: boolean;
+        last_activity_at?: string;
+        enrolled_at?: string;
+      };
+    }>
+  >(`/student/courses/${courseId}`);
 
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || "Course not found");
   }
 
-  return response.data.data.course;
+  const { course, is_enrolled, progress } = response.data.data;
+
+  // Merge is_enrolled and progress into the course object
+  return {
+    ...course,
+    is_enrolled: is_enrolled ?? course.is_enrolled,
+    progress: progress ?? course.progress,
+  };
 };
 
 // Get course progress

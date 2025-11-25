@@ -22,7 +22,6 @@ import {
   getCourseProgress,
   updateCourseProgress,
 } from "../services/courses";
-import { submitQuiz } from "../services/quiz";
 import { useUIStore } from "../store/uiStore";
 import { debugLog } from "../utils/debug";
 import { QuizRenderer } from "../components/course/QuizRenderer";
@@ -112,26 +111,97 @@ export const CoursePlayer = () => {
     ? detailModules
     : courseProgress?.course?.modules || detailModules;
 
+  // Extract completed lesson and quiz IDs from progress
+  const completedLessonIds = useMemo(() => {
+    if (!courseProgress?.completed_lessons) return new Set<number>();
+
+    // completed_lessons is an array of lesson IDs: number[]
+    const lessons = courseProgress.completed_lessons;
+    if (Array.isArray(lessons)) {
+      // Filter out any non-number values and create Set
+      return new Set(
+        lessons.filter((id): id is number => typeof id === "number")
+      );
+    }
+    return new Set<number>();
+  }, [courseProgress?.completed_lessons]);
+
+  const completedQuizIds = useMemo(() => {
+    if (!courseProgress?.completed_quizzes) return new Set<number>();
+
+    // completed_quizzes is an array of objects: Array<{quiz_id: number, completed_at: string}>
+    const quizzes = courseProgress.completed_quizzes;
+    if (Array.isArray(quizzes)) {
+      return new Set(
+        quizzes
+          .filter(
+            (q): q is { quiz_id: number } =>
+              typeof q === "object" && q !== null && "quiz_id" in q
+          )
+          .map((q) => q.quiz_id)
+      );
+    }
+    return new Set<number>();
+  }, [courseProgress?.completed_quizzes]);
+
   const outline = useMemo(() => {
     if (!modulesSource.length) {
       return undefined;
     }
 
     return {
-      modules: modulesSource.map((module) => ({
-        id: module.id,
-        title: module.title,
-        order_index: module.order_index,
-        lessons: (module.lessons || []).map((lesson) => ({
-          id: lesson.id,
-          title: lesson.title,
-          order_index: lesson.order_index,
-          is_completed:
-            (lesson as { is_completed?: boolean }).is_completed || false,
-        })),
-      })),
+      modules: modulesSource.map((module) => {
+        const moduleLessons = (module.lessons || []).map((lesson) => {
+          const isLessonCompleted = completedLessonIds.has(lesson.id);
+
+          // Get quizzes for this lesson from lessonDetail if it's the current lesson
+          let lessonQuizzes:
+            | Array<{
+                id: number;
+                title?: string;
+                order_index: number;
+                is_completed: boolean;
+              }>
+            | undefined;
+          if (
+            lessonDetail &&
+            lessonDetail.id === lesson.id &&
+            lessonDetail.quizzes
+          ) {
+            lessonQuizzes = lessonDetail.quizzes.map((quiz) => ({
+              id: quiz.id,
+              title: quiz.question || quiz.title || `Quiz ${quiz.order_index}`,
+              order_index: quiz.order_index ?? 0,
+              is_completed: completedQuizIds.has(quiz.id),
+            }));
+          }
+
+          return {
+            id: lesson.id,
+            title: lesson.title,
+            order_index: lesson.order_index,
+            is_completed: isLessonCompleted,
+            quizzes: lessonQuizzes,
+          };
+        });
+
+        // Module is completed if all lessons are completed
+        // Note: We'd need quiz data for all lessons to fully determine module completion
+        // For now, we check if all lessons are completed
+        const isModuleCompleted =
+          moduleLessons.length > 0 &&
+          moduleLessons.every((lesson) => lesson.is_completed);
+
+        return {
+          id: module.id,
+          title: module.title,
+          order_index: module.order_index,
+          is_completed: isModuleCompleted,
+          lessons: moduleLessons,
+        };
+      }),
     };
-  }, [modulesSource]);
+  }, [modulesSource, completedLessonIds, completedQuizIds, lessonDetail]);
 
   const currentModule = useMemo(() => {
     if (!modulesSource.length || !activeLessonId) {
@@ -364,7 +434,11 @@ export const CoursePlayer = () => {
           streak_days: 0,
         },
       } as QuizResult;
-      debugLog("CoursePlayer", "Quiz evaluated locally", { quizId, result, meta });
+      debugLog("CoursePlayer", "Quiz evaluated locally", {
+        quizId,
+        result,
+        meta,
+      });
 
       setQuizStates((prev) => ({
         ...prev,
@@ -712,31 +786,85 @@ export const CoursePlayer = () => {
     }
   }, [courseId, lessonId, navigationState, navigate]);
 
+  // Find the first incomplete lesson in the course
+  const findFirstIncompleteLesson = useMemo(() => {
+    if (!outline || !courseProgress) return null;
+
+    // If there's a last_lesson_id, check if it's completed
+    if (courseProgress.last_lesson_id) {
+      const lastLessonCompleted = completedLessonIds.has(
+        courseProgress.last_lesson_id
+      );
+
+      // If last lesson is not completed, return it
+      if (!lastLessonCompleted) {
+        // Find the module containing this lesson
+        for (const module of outline.modules) {
+          const lesson = module.lessons.find(
+            (l) => l.id === courseProgress.last_lesson_id
+          );
+          if (lesson) {
+            return { moduleId: module.id, lessonId: lesson.id };
+          }
+        }
+      }
+    }
+
+    // Find the first incomplete lesson in order
+    for (const module of outline.modules) {
+      for (const lesson of module.lessons) {
+        if (!lesson.is_completed) {
+          return { moduleId: module.id, lessonId: lesson.id };
+        }
+      }
+    }
+
+    // If all lessons are completed, return the last lesson
+    const lastModule = outline.modules[outline.modules.length - 1];
+    if (lastModule && lastModule.lessons.length > 0) {
+      const lastLesson = lastModule.lessons[lastModule.lessons.length - 1];
+      return { moduleId: lastModule.id, lessonId: lastLesson.id };
+    }
+
+    // Fallback to first lesson
+    if (outline.modules.length > 0 && outline.modules[0].lessons.length > 0) {
+      const firstModule = outline.modules[0];
+      const firstLesson = firstModule.lessons[0];
+      return { moduleId: firstModule.id, lessonId: firstLesson.id };
+    }
+
+    return null;
+  }, [outline, courseProgress, completedLessonIds]);
+
   useEffect(() => {
-    if (navigationState?.initialLessonId || !outline) {
+    if (navigationState?.initialLessonId || !outline || !courseProgress) {
       return;
     }
 
-    if (
-      !activeLessonId &&
-      outline.modules.length > 0 &&
-      outline.modules[0].lessons.length > 0
-    ) {
-      const firstModule = outline.modules[0];
-      const firstLesson = firstModule.lessons[0];
+    if (!activeLessonId && findFirstIncompleteLesson) {
       debugLog(
         "CoursePlayer",
-        "No active lesson detected. Redirecting to first lesson",
+        "No active lesson detected. Redirecting to first incomplete lesson",
         {
-          moduleId: firstModule.id,
-          lessonId: firstLesson.id,
+          moduleId: findFirstIncompleteLesson.moduleId,
+          lessonId: findFirstIncompleteLesson.lessonId,
+          lastLessonId: courseProgress.last_lesson_id,
         }
       );
       navigate(
-        `/course/${courseId}/module/${firstModule.id}/lesson/${firstLesson.id}`
+        `/course/${courseId}/module/${findFirstIncompleteLesson.moduleId}/lesson/${findFirstIncompleteLesson.lessonId}`,
+        { replace: true }
       );
     }
-  }, [activeLessonId, outline, courseId, navigate, navigationState]);
+  }, [
+    activeLessonId,
+    outline,
+    courseProgress,
+    courseId,
+    navigate,
+    navigationState,
+    findFirstIncompleteLesson,
+  ]);
 
   useEffect(() => {
     if (courseDetail) {
@@ -847,9 +975,22 @@ export const CoursePlayer = () => {
             <div className="flex items-center gap-4">
               <button
                 onClick={toggleSidebar}
-                className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg relative"
               >
-                <Menu className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                <Menu
+                  className={`w-6 h-6 text-gray-600 dark:text-gray-400 transition-all duration-300 ${
+                    isSidebarOpen
+                      ? "opacity-0 rotate-90 scale-0"
+                      : "opacity-100 rotate-0 scale-100"
+                  }`}
+                />
+                <X
+                  className={`w-6 h-6 text-gray-600 dark:text-gray-400 absolute top-2 left-2 transition-all duration-300 ${
+                    isSidebarOpen
+                      ? "opacity-100 rotate-0 scale-100"
+                      : "opacity-0 rotate-90 scale-0"
+                  }`}
+                />
               </button>
               <div>
                 <h1 className="text-lg font-semibold text-gray-900 dark:text-white">

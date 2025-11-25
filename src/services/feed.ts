@@ -9,6 +9,8 @@ import type {
   PostComment,
   PostCommentResponse,
   PostShareResponse,
+  FeedTimeResponse,
+  FeedExchangeResponse,
 } from "../types/feed";
 
 // Get feed posts
@@ -25,9 +27,9 @@ export const getFeedPosts = async (
   if (filters.sort_order) params.append("sort_order", filters.sort_order);
   if (filters.per_page) params.append("per_page", filters.per_page.toString());
 
-  const response = await api.get<
-    ApiResponse<PaginatedResponse<FeedPost>>
-  >(`/student/feed?${params.toString()}`);
+  const response = await api.get<ApiResponse<PaginatedResponse<FeedPost>>>(
+    `/student/feed?${params.toString()}`
+  );
 
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || "Failed to fetch feed posts");
@@ -61,12 +63,13 @@ export const getPostsByTags = async (
   tags: string[],
   per_page?: number
 ): Promise<PaginatedResponse<FeedPost>> => {
-  const response = await api.post<
-    ApiResponse<PaginatedResponse<FeedPost>>
-  >("/student/feed/tags", {
-    tags,
-    per_page,
-  });
+  const response = await api.post<ApiResponse<PaginatedResponse<FeedPost>>>(
+    "/student/feed/tags",
+    {
+      tags,
+      per_page,
+    }
+  );
 
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || "Failed to fetch posts by tags");
@@ -144,4 +147,51 @@ export const sharePost = async (
   }
 
   return response.data.data || [];
+};
+
+// Get remaining feed time
+export const getRemainingFeedTime = async (): Promise<FeedTimeResponse> => {
+  const response = await api.get<ApiResponse<FeedTimeResponse>>(
+    "/student/feed/remaining"
+  );
+
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || "Failed to get feed time");
+  }
+
+  return response.data.data;
+};
+
+// Exchange XP for feed time
+export const exchangeXpForFeedTime = async (
+  xp: number,
+  clientEventId?: string
+): Promise<FeedExchangeResponse> => {
+  const headers: Record<string, string> = {};
+  if (clientEventId) {
+    headers["X-Client-Event-Id"] = clientEventId;
+  }
+
+  const response = await api.post<ApiResponse<FeedExchangeResponse>>(
+    "/student/feed/exchange",
+    { xp },
+    { headers }
+  );
+
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || "Failed to exchange XP");
+  }
+
+  return response.data.data;
+};
+
+// End feed session
+export const endFeedSession = async (): Promise<void> => {
+  const response = await api.post<ApiResponse<void>>(
+    "/student/feed/session/end"
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Failed to end session");
+  }
 };

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import {
   Heart,
@@ -8,6 +9,10 @@ import {
   AlertCircle,
   MessageCircle,
   User,
+  Lock,
+  BookOpen,
+  Coins,
+  X,
 } from "lucide-react";
 import {
   getFeedPosts,
@@ -15,16 +20,29 @@ import {
   sharePost,
   commentOnPost,
   getPostDetail,
+  getRemainingFeedTime,
+  exchangeXpForFeedTime,
 } from "../services/feed";
+import { searchPosts } from "../services/search";
 import { formatRelativeTime } from "../utils/format";
-import type { FeedFilters, PostType, PostAuthor } from "../types/feed";
+import { getCurrentUser } from "../services/auth";
+import type {
+  FeedFilters,
+  PostType,
+  PostAuthor,
+  FeedPost,
+} from "../types/feed";
+import type { PostSearchItem } from "../types/search";
 
 export const Feed = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<FeedFilters>({
     per_page: 15,
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchOffset, setSearchOffset] = useState(0);
   const [expandedComments, setExpandedComments] = useState<
     Record<number, boolean>
   >({});
@@ -33,12 +51,103 @@ export const Feed = () => {
   );
   const [activeAuthor, setActiveAuthor] = useState<PostAuthor | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showLockModal, setShowLockModal] = useState(false);
+  const [feedLocked, setFeedLocked] = useState(false);
 
-  // Fetch posts
-  const { data: feedData, isLoading: isLoadingPosts } = useQuery({
-    queryKey: ["feed-posts", filters],
-    queryFn: () => getFeedPosts(filters),
+  // Check feed time on mount
+  const { data: feedTime, refetch: refetchFeedTime } = useQuery({
+    queryKey: ["feed-time"],
+    queryFn: getRemainingFeedTime,
+    retry: false,
   });
+
+  // Check if feed is locked
+  useEffect(() => {
+    if (feedTime) {
+      const isLocked =
+        !feedTime.unlimited &&
+        (feedTime.seconds === null || feedTime.seconds <= 0);
+      setFeedLocked(isLocked);
+      setShowLockModal(isLocked);
+    }
+  }, [feedTime]);
+
+  // Regular feed posts query (when not searching)
+  const {
+    data: feedData,
+    isLoading: isLoadingPosts,
+    error: feedError,
+  } = useQuery({
+    queryKey: ["feed-posts", filters],
+    queryFn: async () => {
+      try {
+        return await getFeedPosts(filters);
+      } catch (error: any) {
+        // Handle FEED_LOCKED error
+        if (
+          error?.response?.status === 403 ||
+          error?.response?.data?.error_code === "FEED_LOCKED"
+        ) {
+          setFeedLocked(true);
+          setShowLockModal(true);
+        }
+        throw error;
+      }
+    },
+    enabled: !isSearchMode || !searchQuery.trim(),
+    retry: (failureCount, error: any) => {
+      // Don't retry on FEED_LOCKED errors
+      if (
+        error?.response?.status === 403 ||
+        error?.response?.data?.error_code === "FEED_LOCKED"
+      ) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+  });
+
+  // Handle feed error separately
+  useEffect(() => {
+    if (feedError) {
+      const error = feedError as any;
+      if (
+        error?.response?.status === 403 ||
+        error?.response?.data?.error_code === "FEED_LOCKED"
+      ) {
+        setFeedLocked(true);
+        setShowLockModal(true);
+      }
+    }
+  }, [feedError]);
+
+  // Search posts query (when searching)
+  const { data: searchResults, isLoading: isSearchLoading } = useQuery({
+    queryKey: ["search-posts", searchQuery, filters.type, searchOffset],
+    queryFn: () =>
+      searchPosts(searchQuery, {
+        type: filters.type,
+        limit: filters.per_page || 15,
+        offset: searchOffset,
+      }),
+    enabled: isSearchMode && !!searchQuery.trim(),
+  });
+
+  // Helper function to convert PostSearchItem to FeedPost format
+  const convertSearchItemToPost = (item: PostSearchItem): FeedPost => {
+    return {
+      id: item.id,
+      title: item.title,
+      content_text: item.content_text,
+      type: item.type as PostType,
+      tags: item.tags,
+      author: item.author,
+      likes_count: item.likes_count,
+      comments_count: item.comments_count,
+      has_liked: false, // Search results may not include this
+      created_at: "", // Search results may not include this
+    };
+  };
 
   // Like mutation with optimistic updates
   const likeMutation = useMutation({
@@ -132,10 +241,19 @@ export const Feed = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setFilters((prev) => ({
-      ...prev,
-      search: searchQuery || undefined,
-    }));
+    if (searchQuery.trim()) {
+      setIsSearchMode(true);
+      setSearchOffset(0);
+    } else {
+      setIsSearchMode(false);
+      setSearchOffset(0);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setIsSearchMode(false);
+    setSearchQuery("");
+    setSearchOffset(0);
   };
 
   const handleFilterChange = (
@@ -148,19 +266,81 @@ export const Feed = () => {
     }));
   };
 
-  const posts = feedData?.data || [];
+  // XP exchange mutation
+  const exchangeXpMutation = useMutation({
+    mutationFn: (xp: number) => {
+      // Generate a unique client event ID for idempotency
+      const clientEventId = crypto.randomUUID();
+      return exchangeXpForFeedTime(xp, clientEventId);
+    },
+    onSuccess: () => {
+      // Refetch feed time and feed posts
+      refetchFeedTime();
+      queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
+      setShowLockModal(false);
+      setFeedLocked(false);
+    },
+  });
+
+  // Get current user for XP check
+  const currentUser = getCurrentUser();
+  const userXP = currentUser?.xp_total || 0;
+  const canExchangeXP = userXP >= 10;
+
+  // Handler functions
+  const handleGoToCourses = () => {
+    navigate("/courses");
+  };
+
+  const handleExchangeXP = () => {
+    if (canExchangeXP) {
+      exchangeXpMutation.mutate(10); // Exchange 10 XP for 10 minutes
+    }
+  };
+
+  // Format remaining time
+  const formatRemainingTime = (seconds: number | null): string => {
+    if (seconds === null) return "Unlimited";
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+    return `${Math.floor(seconds / 3600)}h ${Math.floor(
+      (seconds % 3600) / 60
+    )}m`;
+  };
+
+  // Determine which posts to display
+  const posts =
+    isSearchMode && searchResults
+      ? searchResults.results.map(convertSearchItemToPost)
+      : feedData?.data || [];
+
+  const isLoadingFeed = isSearchMode ? isSearchLoading : isLoadingPosts;
 
   return (
     <PageShell>
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Feed
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Stay motivated with tips, discussions, and announcements
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                Feed
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400">
+                Stay motivated with tips, discussions, and announcements
+              </p>
+            </div>
+            {feedTime && !feedTime.unlimited && (
+              <div className="text-right">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Remaining Time
+                </div>
+                <div className="text-lg font-semibold text-azure-500">
+                  {formatRemainingTime(feedTime.seconds)}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Search and Filters */}
@@ -204,8 +384,10 @@ export const Feed = () => {
                 <option value="">All Types</option>
                 <option value="question">Questions</option>
                 <option value="announcement">Announcements</option>
-                <option value="resource">Resources</option>
+                {/* <option value="resource">Resources</option> */}
                 <option value="discussion">Discussions</option>
+                <option value="tip">Tips</option>
+                <option value="meme">Memes</option>
               </select>
             </div>
             <div>
@@ -247,8 +429,31 @@ export const Feed = () => {
           </div>
         </div>
 
+        {/* Search Results Header */}
+        {isSearchMode && searchQuery && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Search Results for "{searchQuery}"
+              </h2>
+              {searchResults && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {searchResults.total} result
+                  {searchResults.total !== 1 ? "s" : ""} found
+                </p>
+              )}
+              <button
+                onClick={handleClearSearch}
+                className="text-azure-500 hover:text-azure-600 text-sm font-medium"
+              >
+                Clear search
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Posts */}
-        {isLoadingPosts ? (
+        {isLoadingFeed ? (
           <div className="space-y-6">
             {[...Array(5)].map((_, i) => (
               <div
@@ -512,7 +717,8 @@ export const Feed = () => {
             ))}
 
             {/* Pagination */}
-            {feedData?.meta && feedData.meta.last_page > 1 && (
+            {/* Regular Pagination */}
+            {!isSearchMode && feedData?.meta && feedData.meta.last_page > 1 && (
               <div className="flex justify-center gap-2">
                 <button
                   onClick={() => {
@@ -546,6 +752,45 @@ export const Feed = () => {
                 </button>
               </div>
             )}
+
+            {/* Search Pagination */}
+            {isSearchMode &&
+              searchResults &&
+              searchResults.total > (filters.per_page || 15) && (
+                <div className="flex justify-center gap-2 mt-6">
+                  <button
+                    onClick={() =>
+                      setSearchOffset((prev) =>
+                        Math.max(0, prev - (filters.per_page || 15))
+                      )
+                    }
+                    disabled={searchOffset === 0}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    Previous
+                  </button>
+                  <div className="px-4 py-2 bg-azure-500 text-white rounded-lg">
+                    Showing {searchOffset + 1}-
+                    {Math.min(
+                      searchOffset + (filters.per_page || 15),
+                      searchResults.total
+                    )}{" "}
+                    of {searchResults.total}
+                  </div>
+                  <button
+                    onClick={() =>
+                      setSearchOffset((prev) => prev + (filters.per_page || 15))
+                    }
+                    disabled={
+                      searchOffset + (filters.per_page || 15) >=
+                      searchResults.total
+                    }
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
           </div>
         ) : (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 text-center border border-gray-200 dark:border-gray-700">
@@ -639,6 +884,84 @@ export const Feed = () => {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feed Lock Modal */}
+      {showLockModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-red-100 dark:bg-red-900/20 p-3 rounded-full">
+                  <Lock className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Feed Locked
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowLockModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Feed locked — complete a lesson or exchange 10 XP to gain access.
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleGoToCourses}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-azure-500 hover:bg-azure-600 text-white rounded-lg font-semibold transition-colors"
+              >
+                <BookOpen className="w-5 h-5" />
+                Go to Courses
+              </button>
+
+              <button
+                onClick={handleExchangeXP}
+                disabled={!canExchangeXP || exchangeXpMutation.isPending}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors"
+              >
+                <Coins className="w-5 h-5" />
+                {exchangeXpMutation.isPending
+                  ? "Exchanging..."
+                  : canExchangeXP
+                  ? "Exchange 10 XP (10 minutes)"
+                  : `Insufficient XP (Need 10, Have ${userXP})`}
+              </button>
+            </div>
+
+            {!canExchangeXP && (
+              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+                Complete lessons to earn XP, then exchange it for feed time!
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Feed Lock Overlay - blocks interaction when locked */}
+      {feedLocked && !showLockModal && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-sm text-center border border-gray-200 dark:border-gray-700">
+            <Lock className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+              Feed Locked
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Complete a lesson or exchange XP to unlock the feed.
+            </p>
+            <button
+              onClick={() => setShowLockModal(true)}
+              className="px-4 py-2 bg-azure-500 hover:bg-azure-600 text-white rounded-lg font-semibold transition-colors"
+            >
+              Unlock Feed
+            </button>
           </div>
         </div>
       )}

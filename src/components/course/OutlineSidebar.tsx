@@ -19,6 +19,9 @@ export const OutlineSidebar = ({
   isOpen,
   onToggle,
 }: OutlineSidebarProps) => {
+  // onToggle is kept for interface compatibility but toggle is handled in parent component
+  void onToggle;
+
   const [expandedModules, setExpandedModules] = useState<number[]>([
     currentModuleId || outline.modules[0]?.id || 0,
   ]);
@@ -33,14 +36,6 @@ export const OutlineSidebar = ({
 
   return (
     <>
-      {/* Mobile Toggle Button */}
-      <button
-        onClick={onToggle}
-        className="md:hidden fixed top-20 left-4 z-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-md p-2 hover:bg-gray-50 dark:hover:bg-gray-700"
-      >
-        {isOpen ? "Close" : "Outline"}
-      </button>
-
       {/* Sidebar */}
       <div
         className={`
@@ -55,20 +50,46 @@ export const OutlineSidebar = ({
 
           {outline.modules.map((module) => {
             const isExpanded = expandedModules.includes(module.id);
+            const isModuleCompleted = module.is_completed ?? false;
 
             return (
               <div key={module.id} className="mb-2">
                 <button
                   onClick={() => toggleModule(module.id)}
-                  className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className={`
+                    w-full flex items-center justify-between p-3 rounded-lg transition-colors
+                    ${
+                      isModuleCompleted
+                        ? "bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30"
+                        : "hover:bg-gray-100 dark:hover:bg-gray-700"
+                    }
+                  `}
                 >
-                  <span className="font-medium text-gray-900 dark:text-white text-sm">
+                  <span
+                    className={`font-medium text-sm ${
+                      isModuleCompleted
+                        ? "text-green-700 dark:text-green-300"
+                        : "text-gray-900 dark:text-white"
+                    }`}
+                  >
                     Module {module.order_index}: {module.title}
                   </span>
                   {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                    <ChevronDown
+                      className={`w-4 h-4 ${
+                        isModuleCompleted
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-gray-500"
+                      }`}
+                    />
                   ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-500" />
+                    <ChevronRight
+                      className={`w-4 h-4 ${
+                        isModuleCompleted
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-gray-500"
+                      }`}
+                    />
                   )}
                 </button>
 
@@ -79,27 +100,60 @@ export const OutlineSidebar = ({
                       const isCompleted = lesson.is_completed;
 
                       return (
-                        <button
-                          key={lesson.id}
-                          onClick={() => onNavigate(module.id, lesson.id)}
-                          className={`
-                            w-full flex items-center gap-2 p-2 rounded-lg text-left transition-colors
-                            ${
-                              isCurrent
-                                ? "bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300"
-                                : "hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-                            }
-                          `}
-                        >
-                          {isCompleted ? (
-                            <CheckCircle className="w-4 h-4 text-azure-500 flex-shrink-0" />
-                          ) : (
-                            <Circle className="w-4 h-4 flex-shrink-0" />
-                          )}
-                          <span className="text-sm truncate">
-                            {lesson.title}
-                          </span>
-                        </button>
+                        <div key={lesson.id}>
+                          <button
+                            onClick={() => onNavigate(module.id, lesson.id)}
+                            className={`
+                              w-full flex items-center gap-2 p-2 rounded-lg text-left transition-colors
+                              ${
+                                isCurrent
+                                  ? "bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300"
+                                  : isCompleted
+                                  ? "hover:bg-green-50 dark:hover:bg-green-900/20 text-green-700 dark:text-green-300"
+                                  : "hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                              }
+                            `}
+                          >
+                            {isCompleted ? (
+                              <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 fill-current" />
+                            ) : (
+                              <Circle className="w-4 h-4 flex-shrink-0" />
+                            )}
+                            <span className="text-sm truncate">
+                              {lesson.title}
+                            </span>
+                          </button>
+                          {/* Show quizzes if available - COMMENTED OUT FOR NOW */}
+                          {/* {lesson.quizzes && lesson.quizzes.length > 0 && (
+                            <div className="ml-6 mt-1 space-y-1">
+                              {lesson.quizzes.map((quiz) => {
+                                const isQuizCompleted = quiz.is_completed;
+                                return (
+                                  <div
+                                    key={quiz.id}
+                                    className={`
+                                      flex items-center gap-2 px-2 py-1 rounded text-xs
+                                      ${
+                                        isQuizCompleted
+                                          ? "text-green-600 dark:text-green-400"
+                                          : "text-gray-500 dark:text-gray-400"
+                                      }
+                                    `}
+                                  >
+                                    {isQuizCompleted ? (
+                                      <CheckCircle className="w-3 h-3 text-green-600 dark:text-green-400 flex-shrink-0 fill-current" />
+                                    ) : (
+                                      <Circle className="w-3 h-3 flex-shrink-0" />
+                                    )}
+                                    <span className="truncate">
+                                      Quiz: {quiz.title || `Quiz ${quiz.order_index}`}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )} */}
+                        </div>
                       );
                     })}
                   </div>

@@ -14,9 +14,11 @@ export const PageShell = ({
   showTopNav = true,
 }: PageShellProps) => {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors w-full max-w-full overflow-x-hidden">
       {showTopNav && <TopNav />}
-      <main className="pb-20 md:pb-4">{children}</main>
+      <main className="pb-20 md:pb-4 w-full max-w-full overflow-x-hidden">
+        {children}
+      </main>
       {showBottomNav && <BottomNav />}
     </div>
   );

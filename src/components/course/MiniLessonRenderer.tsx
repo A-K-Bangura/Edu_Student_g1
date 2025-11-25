@@ -7,8 +7,8 @@ import type {
 } from "../../types/lesson";
 import {
   FileText,
-  Image as ImageIcon,
-  Video,
+  // Image as ImageIcon,
+  // Video,
   Download,
   Sparkles,
   Info,
@@ -35,6 +35,24 @@ const fallbackBlockFromLegacy = (lesson: MiniLesson): MiniLessonBlock => ({
 });
 
 const renderTextContent = (content: string) => {
+  if (!content || !content.trim()) {
+    return null;
+  }
+
+  // Check if content contains HTML tags
+  const hasHtmlTags = /<[^>]+>/.test(content);
+
+  if (hasHtmlTags) {
+    // Render as HTML - HTML tags will be parsed and displayed properly
+    return (
+      <div
+        className="leading-relaxed prose dark:prose-invert max-w-none"
+        dangerouslySetInnerHTML={{ __html: content }}
+      />
+    );
+  }
+
+  // Render as plain text with paragraph splitting
   const paragraphs = content
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
@@ -66,12 +84,12 @@ const TextBlock = ({
   if (textType === "plain") {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-        <div className="flex items-center gap-2 mb-4">
+        {/* <div className="flex items-center gap-2 mb-4">
           <FileText className="w-5 h-5 text-azure-500" />
           <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
             Text Content
           </span>
-        </div>
+        </div> */}
         <div className="prose dark:prose-invert max-w-none space-y-3 text-gray-700 dark:text-gray-200">
           {renderTextContent(content)}
         </div>
@@ -90,17 +108,17 @@ const TextBlock = ({
   } as const;
 
   const iconMap: Record<MiniLessonTextType, ReactElement> = {
-    remember: <Sparkles className="w-5 h-5" />,
-    simply_put: <Info className="w-5 h-5" />,
-    important: <AlertTriangle className="w-5 h-5" />,
-    plain: <FileText className="w-5 h-5" />,
+    remember: <Sparkles className="w-4 h-4" />,
+    simply_put: <Info className="w-4 h-4" />,
+    important: <AlertTriangle className="w-4 h-4" />,
+    plain: <FileText className="w-4 h-4 hidden" />,
   } as const;
 
   const titles: Record<MiniLessonTextType, string> = {
     remember: "Remember",
     simply_put: "Simply Put",
     important: "Important",
-    plain: "Text Content",
+    plain: " ",
   } as const;
 
   return (
@@ -117,7 +135,6 @@ const TextBlock = ({
     </div>
   );
 };
-
 const ImageBlock = ({
   block,
   onPreview,
@@ -130,27 +147,29 @@ const ImageBlock = ({
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <ImageIcon className="w-5 h-5 text-azure-500" />
           <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
             Image
           </span>
-        </div>
+        </div> */}
         {block.media_url && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center w-full justify-end gap-2">
             <button
               type="button"
               onClick={() => onPreview(block.media_url as string)}
               className="inline-flex items-center gap-2 text-sm text-azure-500 hover:text-azure-600"
             >
-              <ExternalLink className="w-4 h-4" /> View
+              <ExternalLink className="w-4 h-4" />
+              {/* View */}
             </button>
             <a
               href={block.media_url}
               download
               className="inline-flex items-center gap-2 text-sm text-azure-500 hover:text-azure-600"
             >
-              <Download className="w-4 h-4" /> Download
+              <Download className="w-4 h-4" />
+              {/* Download */}
             </a>
           </div>
         )}
@@ -182,12 +201,12 @@ const ImageBlock = ({
 
 const VideoBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => (
   <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-    <div className="flex items-center gap-2 mb-4">
+    {/* <div className="flex items-center gap-2 mb-4">
       <Video className="w-5 h-5 text-azure-500" />
       <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
         Video Content
       </span>
-    </div>
+    </div> */}
     {block.media_url ? (
       <div className="space-y-4">
         <video
@@ -218,12 +237,12 @@ const EmbedBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-      <div className="flex items-center gap-2 mb-4">
+      {/* <div className="flex items-center gap-2 mb-4">
         <Video className="w-5 h-5 text-azure-500" />
         <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
           Embedded Video
         </span>
-      </div>
+      </div> */}
       {embedUrl ? (
         <div className="aspect-video rounded-lg overflow-hidden shadow-md">
           <iframe
@@ -251,12 +270,12 @@ const EmbedBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => {
 const DocumentBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => (
   <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
     <div className="flex items-center justify-between gap-2 mb-4">
-      <div className="flex items-center gap-2">
+      {/* <div className="flex items-center gap-2">
         <FileText className="w-5 h-5 text-azure-500" />
         <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
           Document
         </span>
-      </div>
+      </div> */}
       {block.media_url && (
         <a
           href={block.media_url}

@@ -2,6 +2,7 @@ export interface CourseFilters {
   university_id?: number;
   faculty_id?: number;
   department_id?: number;
+  organization_id?: number;
   level?: string;
   search?: string;
   sort_by?: "created_at" | "title";
@@ -103,6 +104,8 @@ export interface CourseProgress {
   enrolled_at?: string;
   last_lesson_id?: number | null;
   last_module_id?: number | null;
+  completed_lessons?: number[];
+  completed_quizzes?: Array<{ quiz_id: number; completed_at: string }>;
   course?: {
     id: number;
     title: string;

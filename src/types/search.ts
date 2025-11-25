@@ -1,6 +1,7 @@
 // Search Result - Course
 export interface CourseSearchItem {
   id: number;
+  uuid?: string;
   title: string;
   description: string;
   level: string;
@@ -11,6 +12,7 @@ export interface CourseSearchItem {
   };
   tags?: string[];
   enrollments_count?: number;
+  thumbnail_url?: string;
 }
 
 // Search Result - Post
