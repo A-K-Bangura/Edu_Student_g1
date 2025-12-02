@@ -33,10 +33,11 @@ export const getFaculties = async (
 
 // Get departments for a faculty
 export const getDepartments = async (
+  universityId: number,
   facultyId: number
 ): Promise<Department[]> => {
   const response = await api.get<ApiResponse<Department[]>>(
-    `/faculties/${facultyId}/departments`
+    `/universities/${universityId}/faculties/${facultyId}/departments`
   );
   return response.data.data || [];
 };

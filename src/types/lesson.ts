@@ -167,6 +167,7 @@ export interface CourseOutline {
       title: string;
       order_index: number;
       is_completed: boolean;
+      is_locked?: boolean; // Indicates if lesson is locked due to sequential access
       quizzes?: Array<{
         id: number;
         title?: string;

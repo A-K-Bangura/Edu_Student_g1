@@ -45,6 +45,9 @@ export interface UserProfile {
     twitter?: string;
     github?: string;
     portfolio?: string;
+    facebook?: string;
+    instagram?: string;
+    tiktok?: string;
   } | null;
   xp_total?: number;
   streak_days?: number;
@@ -95,6 +98,9 @@ export interface UpdateProfileData {
     twitter?: string;
     github?: string;
     portfolio?: string;
+    facebook?: string;
+    instagram?: string;
+    tiktok?: string;
   };
 }
 

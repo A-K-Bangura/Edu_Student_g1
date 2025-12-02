@@ -96,6 +96,7 @@ export interface FeedFilters {
   sort_by?: "created_at" | "popularity";
   sort_order?: "asc" | "desc";
   per_page?: number;
+  page?: number;
 }
 
 // Feed time related types

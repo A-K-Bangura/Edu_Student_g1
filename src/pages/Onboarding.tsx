@@ -95,9 +95,9 @@ export const Onboarding = () => {
   });
 
   const { data: departments = [] } = useQuery({
-    queryKey: ["departments", formData.faculty_id],
-    queryFn: () => getDepartments(formData.faculty_id as number),
-    enabled: !!formData.faculty_id,
+    queryKey: ["departments", formData.university_id, formData.faculty_id],
+    queryFn: () => getDepartments(formData.university_id as number, formData.faculty_id as number),
+    enabled: !!formData.university_id && !!formData.faculty_id,
   });
 
   // Helper to determine if level requires university/faculty/department
@@ -155,6 +155,7 @@ export const Onboarding = () => {
     },
     onSuccess: () => {
       clearDraft();
+      // User is now logged in (token moved from pending to main in completeOnboarding)
       navigate("/dashboard");
     },
   });

@@ -1,5 +1,7 @@
 import api from "./api";
 import type { ApiResponse, User } from "../types";
+import { ApiError } from "../utils/apiError";
+import type { AxiosError } from "axios";
 
 export interface LoginCredentials {
   email?: string;
@@ -55,20 +57,46 @@ export interface CompleteOnboardingResponse {
 export const login = async (
   credentials: LoginCredentials
 ): Promise<AuthResponse> => {
-  const response = await api.post<ApiResponse<AuthResponse>>(
-    "/student/auth/login",
-    credentials
-  );
+  try {
+    const response = await api.post<ApiResponse<AuthResponse>>(
+      "/student/auth/login",
+      credentials
+    );
 
-  if (!response.data.success || !response.data.data) {
-    throw new Error(response.data.message || "Login failed");
+    if (!response.data.success || !response.data.data) {
+      // Handle error response
+      const errorData = response.data.error;
+      if (errorData) {
+        throw new ApiError(
+          errorData.message || "Login failed",
+          errorData.code || "LOGIN_FAILED",
+          errorData.details as Record<string, unknown> | undefined,
+          undefined,
+          response.data.request_id
+        );
+      }
+      throw new Error(response.data.message || "Login failed");
+    }
+
+    // Store token
+    localStorage.setItem("auth_token", response.data.data.token);
+    localStorage.setItem("user", JSON.stringify(response.data.data.user));
+
+    return response.data.data;
+  } catch (error) {
+    // Re-throw ApiError as-is
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    // Handle axios errors
+    if (error && typeof error === "object" && "response" in error) {
+      throw ApiError.fromAxiosError(error as AxiosError<ApiResponse>);
+    }
+
+    // Fallback
+    throw error;
   }
-
-  // Store token
-  localStorage.setItem("auth_token", response.data.data.token);
-  localStorage.setItem("user", JSON.stringify(response.data.data.user));
-
-  return response.data.data;
 };
 
 // Send OTP
@@ -107,10 +135,19 @@ export const verifyOtp = async (
 
   const data = response.data.data;
 
-  // Store token and user if provided
+  // For new signups requiring onboarding, store token temporarily
+  // User will only be logged in after completing onboarding
   if (data.token) {
-    localStorage.setItem("auth_token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
+    if (data.requires_onboarding) {
+      // Store token temporarily for onboarding API calls
+      localStorage.setItem("pending_auth_token", data.token);
+      // Store minimal user info for onboarding page
+      localStorage.setItem("pending_user", JSON.stringify(data.user));
+    } else {
+      // For existing users or already onboarded, log in immediately
+      localStorage.setItem("auth_token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+    }
   }
 
   return data;
@@ -127,6 +164,14 @@ export const completeOnboarding = async (
 
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || "Onboarding completion failed");
+  }
+
+  // Move pending token to main auth token (user is now logged in)
+  const pendingToken = localStorage.getItem("pending_auth_token");
+  if (pendingToken) {
+    localStorage.setItem("auth_token", pendingToken);
+    localStorage.removeItem("pending_auth_token");
+    localStorage.removeItem("pending_user");
   }
 
   // Update user in localStorage
@@ -146,6 +191,8 @@ export const logout = async (): Promise<void> => {
   } finally {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("user");
+    localStorage.removeItem("pending_auth_token");
+    localStorage.removeItem("pending_user");
   }
 };
 

@@ -248,7 +248,7 @@ const EmbedBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => {
           <iframe
             src={embedUrl}
             title="Embedded content"
-            className="w-full h-full"
+            className="w-full! h-full!"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />

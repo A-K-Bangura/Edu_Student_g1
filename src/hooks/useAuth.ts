@@ -13,6 +13,7 @@ export const useAuth = () => {
       navigate("/dashboard");
     },
     onError: (error: Error) => {
+      // Don't redirect on error - let the component handle it
       console.error("Login error:", error);
     },
   });
@@ -33,10 +34,12 @@ export const useAuth = () => {
   const verifyOtpMutation = useMutation({
     mutationFn: authService.verifyOtp,
     onSuccess: (data) => {
-      // Redirect based on onboarding status
+      // For new signups, always redirect to onboarding
+      // User will only be logged in after completing onboarding
       if (data.requires_onboarding) {
         navigate("/onboarding");
       } else {
+        // For existing users who don't need onboarding, go to dashboard
         navigate("/dashboard");
       }
     },
@@ -52,7 +55,7 @@ export const useAuth = () => {
   };
 
   return {
-    login: loginMutation.mutate,
+    login: loginMutation.mutateAsync, // Use mutateAsync to return a promise
     signup: sendOtpMutation.mutate, // Alias for sendOtp
     sendOtp: sendOtpMutation.mutate,
     verifyOtp: verifyOtpMutation.mutate,

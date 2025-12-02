@@ -26,6 +26,7 @@ export const getFeedPosts = async (
   if (filters.sort_by) params.append("sort_by", filters.sort_by);
   if (filters.sort_order) params.append("sort_order", filters.sort_order);
   if (filters.per_page) params.append("per_page", filters.per_page.toString());
+  if (filters.page) params.append("page", filters.page.toString());
 
   const response = await api.get<ApiResponse<PaginatedResponse<FeedPost>>>(
     `/student/feed?${params.toString()}`

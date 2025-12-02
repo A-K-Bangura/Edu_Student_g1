@@ -1,5 +1,10 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import {
+  useQuery,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import {
@@ -22,7 +27,9 @@ import {
   getPostDetail,
   getRemainingFeedTime,
   exchangeXpForFeedTime,
+  endFeedSession,
 } from "../services/feed";
+import { getDashboard } from "../services/dashboard";
 import { searchPosts } from "../services/search";
 import { formatRelativeTime } from "../utils/format";
 import { getCurrentUser } from "../services/auth";
@@ -53,6 +60,8 @@ export const Feed = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showLockModal, setShowLockModal] = useState(false);
   const [feedLocked, setFeedLocked] = useState(false);
+  const feedTimeIntervalRef = useRef<number | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // Check feed time on mount
   const { data: feedTime, refetch: refetchFeedTime } = useQuery({
@@ -72,16 +81,95 @@ export const Feed = () => {
     }
   }, [feedTime]);
 
-  // Regular feed posts query (when not searching)
+  // Ensure the student still has access to the feed before gated actions
+  const ensureFeedAccess = async (): Promise<boolean> => {
+    try {
+      const result = await refetchFeedTime();
+      const latest = result.data ?? feedTime;
+
+      if (!latest) return true; // fail-open if we can't determine
+
+      const isLocked =
+        !latest.unlimited &&
+        (latest.seconds === null || latest.seconds <= 0);
+
+      if (isLocked) {
+        setFeedLocked(true);
+        setShowLockModal(true);
+        return false;
+      }
+
+      return true;
+    } catch {
+      // On error, keep current state and allow action (don't hard-block UX)
+      return !feedLocked;
+    }
+  };
+
+  // Periodically refresh remaining feed time while on the Feed page
+  useEffect(() => {
+    // If we don't yet have feedTime data, don't start an interval
+    if (!feedTime) return;
+
+    // Always do an immediate refetch when this effect runs
+    refetchFeedTime();
+
+    // Clear any existing interval before creating a new one
+    if (feedTimeIntervalRef.current !== null) {
+      window.clearInterval(feedTimeIntervalRef.current);
+      feedTimeIntervalRef.current = null;
+    }
+
+    // Only start polling when access is not unlimited
+    if (!feedTime.unlimited) {
+      const intervalId = window.setInterval(() => {
+        refetchFeedTime();
+      }, 5 * 60 * 1000); // 5 minutes
+
+      feedTimeIntervalRef.current = intervalId;
+    }
+
+    // Cleanup when dependencies change or component unmounts
+    return () => {
+      if (feedTimeIntervalRef.current !== null) {
+        window.clearInterval(feedTimeIntervalRef.current);
+        feedTimeIntervalRef.current = null;
+      }
+    };
+  }, [feedTime, refetchFeedTime]);
+
+  // End feed session when leaving the Feed page
+  useEffect(() => {
+    return () => {
+      // Clear any remaining interval
+      if (feedTimeIntervalRef.current !== null) {
+        window.clearInterval(feedTimeIntervalRef.current);
+        feedTimeIntervalRef.current = null;
+      }
+
+      // Fire and forget; errors are swallowed to avoid blocking navigation
+      endFeedSession().catch(() => {
+        // no-op
+      });
+    };
+  }, []);
+
+  // Regular feed posts query (when not searching) with infinite scroll
   const {
     data: feedData,
     isLoading: isLoadingPosts,
     error: feedError,
-  } = useQuery({
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["feed-posts", filters],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 1 }) => {
       try {
-        return await getFeedPosts(filters);
+        return await getFeedPosts({
+          ...filters,
+          page: pageParam as number,
+        });
       } catch (error: any) {
         // Handle FEED_LOCKED error
         if (
@@ -93,6 +181,12 @@ export const Feed = () => {
         }
         throw error;
       }
+    },
+    getNextPageParam: (lastPage) => {
+      const meta = lastPage.meta;
+      if (!meta) return undefined;
+      if (meta.current_page >= meta.last_page) return undefined;
+      return meta.current_page + 1;
     },
     enabled: !isSearchMode || !searchQuery.trim(),
     retry: (failureCount, error: any) => {
@@ -149,29 +243,35 @@ export const Feed = () => {
     };
   };
 
-  // Like mutation with optimistic updates
+  // Like mutation with optimistic updates (supports infinite feed pages)
   const likeMutation = useMutation({
     mutationFn: toggleLikePost,
     onMutate: async (postId: number) => {
       await queryClient.cancelQueries({ queryKey: ["feed-posts"] });
       const previous = queryClient.getQueryData<any>(["feed-posts", filters]);
-      if (previous) {
+
+      if (previous && previous.pages) {
         const next = {
           ...previous,
-          data: previous.data.map((p: any) =>
-            p.id === postId
-              ? {
-                  ...p,
-                  has_liked: !p.has_liked,
-                  likes_count: p.has_liked
-                    ? Math.max(0, (p.likes_count || 0) - 1)
-                    : (p.likes_count || 0) + 1,
-                }
-              : p
-          ),
+          pages: previous.pages.map((page: any) => ({
+            ...page,
+            data: page.data.map((p: any) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    has_liked: !p.has_liked,
+                    likes_count: p.has_liked
+                      ? Math.max(0, (p.likes_count || 0) - 1)
+                      : (p.likes_count || 0) + 1,
+                  }
+                : p
+            ),
+          })),
         };
+
         queryClient.setQueryData(["feed-posts", filters], next);
       }
+
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
@@ -184,16 +284,56 @@ export const Feed = () => {
     },
   });
 
-  // Share mutation
+  // Share mutation with optimistic updates (supports infinite feed pages)
   const shareMutation = useMutation({
     mutationFn: (postId: number) => sharePost(postId),
+    onMutate: async (postId: number) => {
+      await queryClient.cancelQueries({ queryKey: ["feed-posts"] });
+      const previous = queryClient.getQueryData<any>(["feed-posts", filters]);
+
+      if (previous && previous.pages) {
+        const next = {
+          ...previous,
+          pages: previous.pages.map((page: any) => ({
+            ...page,
+            data: page.data.map((p: any) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    shares_count: (p.shares_count || 0) + 1,
+                  }
+                : p
+            ),
+          })),
+        };
+
+        queryClient.setQueryData(["feed-posts", filters], next);
+      }
+
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(["feed-posts", filters], ctx.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["feed-posts"] });
+    },
   });
 
   const handleLike = (postId: number) => {
-    likeMutation.mutate(postId);
+    void (async () => {
+      const canAccess = await ensureFeedAccess();
+      if (!canAccess) return;
+      likeMutation.mutate(postId);
+    })();
   };
 
   const handleShare = async (post: any) => {
+    const canAccess = await ensureFeedAccess();
+    if (!canAccess) return;
+
     const url = post?.slug
       ? `${window.location.origin}/feed/${post.slug}`
       : `${window.location.origin}/feed/${post.id}`;
@@ -213,27 +353,34 @@ export const Feed = () => {
     }
   };
 
-  // Add comment mutation
+  // Add comment mutation (updates the correct post in all loaded pages)
   const addCommentMutation = useMutation({
     mutationFn: ({ postId, content }: { postId: number; content: string }) =>
       commentOnPost(postId, content),
     onSuccess: (data, variables) => {
-      // update list cache
       queryClient.setQueryData(["feed-posts", filters], (oldData: any) => {
-        if (!oldData) return oldData;
-        const updated = { ...oldData };
-        updated.data = updated.data.map((p: any) => {
-          if (p.id !== variables.postId) return p;
-          const nextComments = [...(p.comments || []), data.comment];
-          return {
-            ...p,
-            comments: nextComments,
-            comments_count:
-              (p.comments_count || nextComments.length) + (p.comments ? 0 : 0),
-          };
-        });
+        if (!oldData || !oldData.pages) return oldData;
+
+        const updated = {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            data: page.data.map((p: any) => {
+              if (p.id !== variables.postId) return p;
+              const nextComments = [...(p.comments || []), data.comment];
+              return {
+                ...p,
+                comments: nextComments,
+                comments_count:
+                  (p.comments_count || nextComments.length) + (p.comments ? 0 : 0),
+              };
+            }),
+          })),
+        };
+
         return updated;
       });
+
       // clear input
       setCommentInputs((s) => ({ ...s, [variables.postId]: "" }));
     },
@@ -283,8 +430,17 @@ export const Feed = () => {
   });
 
   // Get current user for XP check
+  const { data: dashboardData } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: getDashboard,
+    retry: 1,
+  });
+
   const currentUser = getCurrentUser();
-  const userXP = currentUser?.xp_total || 0;
+  const userXP =
+    dashboardData?.student?.total_xp ??
+    currentUser?.xp_total ??
+    0;
   const canExchangeXP = userXP >= 10;
 
   // Handler functions
@@ -312,7 +468,47 @@ export const Feed = () => {
   const posts =
     isSearchMode && searchResults
       ? searchResults.results.map(convertSearchItemToPost)
-      : feedData?.data || [];
+      : feedData?.pages.flatMap((page) => page.data) || [];
+
+  // Automatically load more posts when the user reaches the bottom sentinel
+  useEffect(() => {
+    if (isSearchMode) return;
+    const sentinel = loadMoreRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (
+          first.isIntersecting &&
+          hasNextPage &&
+          !isFetchingNextPage &&
+          !isLoadingPosts &&
+          !feedLocked
+        ) {
+          void fetchNextPage();
+        }
+      },
+      {
+        root: null,
+        rootMargin: "0px",
+        threshold: 1.0,
+      }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    isSearchMode,
+    isLoadingPosts,
+    feedLocked,
+  ]);
 
   const isLoadingFeed = isSearchMode ? isSearchLoading : isLoadingPosts;
 
@@ -684,10 +880,14 @@ export const Feed = () => {
 
                     <form
                       className="flex items-center gap-2"
-                      onSubmit={(e) => {
+                      onSubmit={async (e) => {
                         e.preventDefault();
                         const content = (commentInputs[post.id] || "").trim();
                         if (!content) return;
+
+                        const canAccess = await ensureFeedAccess();
+                        if (!canAccess) return;
+
                         addCommentMutation.mutate({ postId: post.id, content });
                       }}
                     >
@@ -716,40 +916,13 @@ export const Feed = () => {
               </div>
             ))}
 
-            {/* Pagination */}
-            {/* Regular Pagination */}
-            {!isSearchMode && feedData?.meta && feedData.meta.last_page > 1 && (
-              <div className="flex justify-center gap-2">
-                <button
-                  onClick={() => {
-                    const newPage = Math.max(1, currentPage - 1);
-                    setCurrentPage(newPage);
-                    // Note: Pagination would need to be added to FeedFilters if needed
-                  }}
-                  disabled={feedData.meta?.current_page === 1}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                >
-                  Previous
-                </button>
-                <div className="px-4 py-2 bg-azure-500 text-white rounded-lg">
-                  {feedData.meta?.current_page} / {feedData.meta?.last_page}
-                </div>
-                <button
-                  onClick={() => {
-                    const newPage = Math.min(
-                      feedData.meta?.last_page || 1,
-                      currentPage + 1
-                    );
-                    setCurrentPage(newPage);
-                    // Note: Pagination would need to be added to FeedFilters if needed
-                  }}
-                  disabled={
-                    feedData.meta?.current_page === feedData.meta?.last_page
-                  }
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                >
-                  Next
-                </button>
+            {/* Infinite scroll status (only for regular feed, not search) */}
+            {!isSearchMode && (
+              <div className="mt-6 flex flex-col items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                {isFetchingNextPage && <span>Loading more posts...</span>}
+                {!hasNextPage && !isFetchingNextPage && (
+                  <span>You're all caught up.</span>
+                )}
               </div>
             )}
 
@@ -802,6 +975,10 @@ export const Feed = () => {
               Check back soon for updates and tips!
             </p>
           </div>
+        )}
+        {/* Sentinel for infinite scroll (only used in non-search mode) */}
+        {!isSearchMode && (
+          <div ref={loadMoreRef} className="h-1 w-full" aria-hidden="true" />
         )}
       </div>
 

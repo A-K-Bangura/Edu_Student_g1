@@ -98,7 +98,7 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
       className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer overflow-hidden border border-gray-200 dark:border-gray-700"
     >
       {/* Thumbnail */}
-      <div className="relative h-40 bg-gradient-to-br from-azure-500 to-blue-violet-500">
+      <div className="relative h-40 bg-linear-to-br from-azure-500 to-blue-violet-500">
         <img
           src={course.thumbnail_url || "/placeholder-course.jpg"}
           alt={course.title}
@@ -123,7 +123,7 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
             {course.title}
           </h3>
-          <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 ml-2" />
+          <ChevronRight className="w-5 h-5 text-gray-400 shrink-0 ml-2" />
         </div>
 
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
@@ -147,9 +147,15 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
         )}
 
         {/* Status Badge */}
-        {isEnrolled && progressPercent > 0 && (
+        {isEnrolled && progressPercent > 0 && progressPercent < 100 && (
           <div className="mt-3 inline-block px-3 py-1 bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300 rounded-full text-xs font-medium">
             In Progress - {Math.round(progressPercent)}%
+          </div>
+        )}
+        {isEnrolled && progressPercent >= 100 && (
+          <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-full text-xs font-semibold">
+            <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+            Completed
           </div>
         )}
         {isEnrolled && progressPercent === 0 && (

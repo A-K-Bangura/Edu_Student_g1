@@ -13,6 +13,11 @@ import {
   Clock,
   TrendingUp,
   LogOut,
+  Edit,
+  X,
+  Phone,
+  Calendar,
+  Link as LinkIcon,
 } from "lucide-react";
 import { getUserProfile, updateProfile } from "../services/profile";
 import { uploadAvatar } from "../services/upload";
@@ -22,17 +27,38 @@ import {
 } from "../services/gamification";
 import { getDashboard } from "../services/dashboard";
 import { logout as authLogout } from "../services/auth";
+import {
+  getUniversities,
+  getFaculties,
+  getDepartments,
+} from "../services/onboarding";
 import { useUIStore } from "../store/uiStore";
 import { formatXP } from "../utils/format";
 import { formatRelativeTime } from "../utils/format";
+import type { UpdateProfileData } from "../types/profile";
+import {
+  DEFAULT_INSPO_TYPE,
+  INSPIRATION_OPTIONS,
+  getSampleInspirationMessage,
+  isValidInspirationType,
+  type InspoType,
+} from "../constants/inspirationMessages";
 
 export const Profile = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<
     "overview" | "badges" | "settings"
   >("overview");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState<UpdateProfileData>({});
+  const [interestInput, setInterestInput] = useState("");
+  const [preferencesForm, setPreferencesForm] = useState<{
+    inspo_type: InspoType;
+  }>({
+    inspo_type: DEFAULT_INSPO_TYPE,
+  });
   const { darkMode, toggleDarkMode, lowBandwidthMode, toggleLowBandwidthMode } =
     useUIStore();
 
@@ -82,8 +108,140 @@ export const Profile = () => {
     mutationFn: updateProfile,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-profile"] });
+      setIsEditModalOpen(false);
+      setEditFormData({});
     },
   });
+
+  const updatePreferencesMutation = useMutation({
+    mutationFn: updateProfile,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
+    },
+  });
+
+  // Fetch universities, faculties, departments for edit form
+  const { data: universities = [] } = useQuery({
+    queryKey: ["universities"],
+    queryFn: getUniversities,
+  });
+
+  const { data: faculties = [] } = useQuery({
+    queryKey: ["faculties", editFormData.university_id],
+    queryFn: () => getFaculties(editFormData.university_id as number),
+    enabled: !!editFormData.university_id,
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: [
+      "departments",
+      editFormData.university_id,
+      editFormData.faculty_id,
+    ],
+    queryFn: () =>
+      getDepartments(
+        editFormData.university_id as number,
+        editFormData.faculty_id as number
+      ),
+    enabled: !!editFormData.university_id && !!editFormData.faculty_id,
+  });
+
+  // Initialize edit form when modal opens
+  useEffect(() => {
+    if (isEditModalOpen && profile) {
+      setEditFormData({
+        firstname: profile.firstname || "",
+        lastname: profile.lastname || "",
+        phone: profile.phone || "",
+        date_of_birth: profile.date_of_birth || "",
+        gender: profile.gender,
+        bio: profile.bio || "",
+        interests: profile.interests || [],
+        university_id: profile.university?.id,
+        faculty_id: profile.faculty?.id,
+        department_id: profile.department?.id,
+        student_id: profile.student_id || "",
+        year_of_study: profile.year_of_study
+          ? parseInt(profile.year_of_study)
+          : undefined,
+        social_links: profile.social_links || {},
+      });
+    }
+  }, [isEditModalOpen, profile]);
+
+  useEffect(() => {
+    if (!profile) {
+      return;
+    }
+
+    const preferences = profile.preferences as
+      | { inspo_type?: unknown }
+      | undefined;
+    const prefValue = isValidInspirationType(preferences?.inspo_type)
+      ? preferences?.inspo_type
+      : DEFAULT_INSPO_TYPE;
+
+    setPreferencesForm((current) =>
+      current.inspo_type === prefValue ? current : { inspo_type: prefValue }
+    );
+  }, [profile]);
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    updateProfileMutation.mutate(editFormData);
+  };
+
+  const handlePreferencesSave = () => {
+    if (!profile) {
+      return;
+    }
+
+    const preferencesData = profile.preferences as
+      | { inspo_type?: unknown }
+      | undefined;
+
+    const currentValue: InspoType = isValidInspirationType(
+      preferencesData?.inspo_type
+    )
+      ? preferencesData?.inspo_type
+      : DEFAULT_INSPO_TYPE;
+
+    if (preferencesForm.inspo_type === currentValue) {
+      return;
+    }
+
+    const updatedPreferences: Record<string, unknown> = {
+      ...(profile.preferences as Record<string, unknown> | undefined),
+      inspo_type: preferencesForm.inspo_type,
+    };
+
+    updatePreferencesMutation.mutate({
+      preferences: updatedPreferences,
+    });
+  };
+
+  const handleAddInterest = () => {
+    if (
+      interestInput.trim() &&
+      editFormData.interests &&
+      editFormData.interests.length < 10
+    ) {
+      setEditFormData({
+        ...editFormData,
+        interests: [...(editFormData.interests || []), interestInput.trim()],
+      });
+      setInterestInput("");
+    }
+  };
+
+  const handleRemoveInterest = (index: number) => {
+    if (editFormData.interests) {
+      setEditFormData({
+        ...editFormData,
+        interests: editFormData.interests.filter((_, i) => i !== index),
+      });
+    }
+  };
 
   const updateAvatarMutation = useMutation({
     mutationFn: uploadAvatar,
@@ -158,11 +316,37 @@ export const Profile = () => {
 
   if (!profile) return null;
 
+  const rawInspirationPreference = (
+    profile.preferences as { inspo_type?: unknown } | undefined
+  )?.inspo_type;
+
+  const currentInspoType: InspoType = isValidInspirationType(
+    rawInspirationPreference
+  )
+    ? rawInspirationPreference
+    : DEFAULT_INSPO_TYPE;
+
+  const preferencesChanged = preferencesForm.inspo_type !== currentInspoType;
+
+  const selectedInspirationOption = INSPIRATION_OPTIONS.find(
+    (option) => option.value === preferencesForm.inspo_type
+  );
+
+  const preferencePreview = getSampleInspirationMessage(
+    preferencesForm.inspo_type,
+    profile.full_name || profile.firstname || profile.email
+  );
+
+  const preferenceErrorMessage =
+    updatePreferencesMutation.error instanceof Error
+      ? updatePreferencesMutation.error.message
+      : null;
+
   return (
     <PageShell>
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Profile Header */}
-        <div className="bg-gradient-to-r from-azure-500 to-blue-violet-500 rounded-lg shadow-md p-6 md:p-8 mb-8">
+        <div className="bg-linear-to-r from-azure-500 to-blue-violet-500 rounded-lg shadow-md p-6 md:p-8 mb-8">
           <div className="flex flex-col md:flex-row items-center md:items-center gap-6 text-center md:text-left">
             <div className="relative">
               {profile.avatar_url ? (
@@ -519,7 +703,7 @@ export const Profile = () => {
                           className="w-16 h-16 rounded-full mb-3 object-cover"
                         />
                       ) : (
-                        <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-rose-500 rounded-full flex items-center justify-center mb-3">
+                        <div className="w-16 h-16 bg-linear-to-br from-amber-500 to-rose-500 rounded-full flex items-center justify-center mb-3">
                           <Award className="w-8 h-8 text-white" />
                         </div>
                       )}
@@ -570,7 +754,7 @@ export const Profile = () => {
                           className="w-16 h-16 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-rose-500 rounded-full flex items-center justify-center">
+                        <div className="w-16 h-16 bg-linear-to-br from-amber-500 to-rose-500 rounded-full flex items-center justify-center">
                           <Award className="w-8 h-8 text-white" />
                         </div>
                       )}
@@ -624,6 +808,89 @@ export const Profile = () => {
         {activeTab === "settings" && (
           <div className="space-y-6">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Profile Information
+                </h2>
+                <button
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-azure-500 hover:bg-azure-600 text-white rounded-lg font-semibold transition-colors"
+                >
+                  <Edit className="w-4 h-4" />
+                  Edit Profile
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                    Name:
+                  </span>
+                  <p className="text-gray-900 dark:text-white">
+                    {profile.firstname && profile.lastname
+                      ? `${profile.firstname} ${profile.lastname}`
+                      : profile.full_name || profile.email}
+                  </p>
+                </div>
+                {profile.phone && (
+                  <div>
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                      Phone:
+                    </span>
+                    <p className="text-gray-900 dark:text-white">
+                      {profile.phone}
+                    </p>
+                  </div>
+                )}
+                {profile.bio && (
+                  <div>
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                      Bio:
+                    </span>
+                    <p className="text-gray-900 dark:text-white">
+                      {profile.bio}
+                    </p>
+                  </div>
+                )}
+                {profile.university && (
+                  <div>
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                      University:
+                    </span>
+                    <p className="text-gray-900 dark:text-white">
+                      {typeof profile.university === "object"
+                        ? profile.university.name
+                        : profile.university}
+                    </p>
+                  </div>
+                )}
+                {profile.faculty && (
+                  <div>
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                      Faculty:
+                    </span>
+                    <p className="text-gray-900 dark:text-white">
+                      {typeof profile.faculty === "object"
+                        ? profile.faculty.name
+                        : profile.faculty}
+                    </p>
+                  </div>
+                )}
+                {profile.department && (
+                  <div>
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                      Department:
+                    </span>
+                    <p className="text-gray-900 dark:text-white">
+                      {typeof profile.department === "object"
+                        ? profile.department.name
+                        : profile.department}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
                 App Settings
               </h2>
@@ -673,6 +940,76 @@ export const Profile = () => {
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                Motivation Preferences
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                Pick the tone of the celebration message you see after each
+                lesson. We will default to the casual & friendly voice if no
+                style is selected.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Inspiration Tone
+                  </label>
+                  <select
+                    value={preferencesForm.inspo_type}
+                    onChange={(e) =>
+                      setPreferencesForm({
+                        inspo_type: e.target.value as InspoType,
+                      })
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                  >
+                    {INSPIRATION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedInspirationOption?.description && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      {selectedInspirationOption.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="bg-gray-50 dark:bg-gray-900/40 border border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-4 text-sm italic text-gray-700 dark:text-gray-300">
+                  "{preferencePreview}"
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePreferencesSave}
+                    disabled={
+                      updatePreferencesMutation.isPending || !preferencesChanged
+                    }
+                    className="inline-flex items-center justify-center px-6 py-3 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors"
+                  >
+                    {updatePreferencesMutation.isPending
+                      ? "Saving..."
+                      : "Save Preference"}
+                  </button>
+                  {updatePreferencesMutation.isSuccess &&
+                    !preferencesChanged && (
+                      <span className="text-sm text-green-600 dark:text-green-400">
+                        Preference saved!
+                      </span>
+                    )}
+                </div>
+
+                {preferenceErrorMessage && (
+                  <p className="text-sm text-rose-600 dark:text-rose-400">
+                    {preferenceErrorMessage}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
                 Account Actions
               </h2>
@@ -683,6 +1020,555 @@ export const Profile = () => {
                 <LogOut className="w-5 h-5" />
                 Log Out
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Profile Modal */}
+        {isEditModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Edit Profile
+                </h2>
+                <button
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <form onSubmit={handleEditSubmit} className="p-6 space-y-6">
+                {/* Personal Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Personal Information
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        First Name
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.firstname || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            firstname: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        maxLength={100}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Last Name
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.lastname || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            lastname: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        maxLength={100}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Phone Number
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="tel"
+                        value={editFormData.phone || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            phone: e.target.value,
+                          })
+                        }
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        placeholder="+232 76 123 4567"
+                        maxLength={50}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Date of Birth
+                      </label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="date"
+                          value={editFormData.date_of_birth || ""}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              date_of_birth: e.target.value,
+                            })
+                          }
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Gender
+                      </label>
+                      <select
+                        value={editFormData.gender || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            gender: e.target.value as
+                              | "male"
+                              | "female"
+                              | "other"
+                              | undefined,
+                          })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                      >
+                        <option value="">Select gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Bio
+                    </label>
+                    <textarea
+                      value={editFormData.bio || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          bio: e.target.value,
+                        })
+                      }
+                      rows={4}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                      placeholder="Tell us about yourself..."
+                      maxLength={1000}
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {(editFormData.bio || "").length} / 1000 characters
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Interests
+                    </label>
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        value={interestInput}
+                        onChange={(e) => setInterestInput(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddInterest();
+                          }
+                        }}
+                        placeholder="Add an interest"
+                        className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        maxLength={50}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddInterest}
+                        disabled={
+                          !interestInput.trim() ||
+                          (editFormData.interests?.length || 0) >= 10
+                        }
+                        className="px-4 py-2 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 text-white rounded-lg font-semibold transition-colors"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {editFormData.interests?.map((interest, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center gap-1 px-3 py-1 bg-azure-100 dark:bg-azure-900/30 text-azure-700 dark:text-azure-300 rounded-full text-sm"
+                        >
+                          {interest}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveInterest(index)}
+                            className="hover:text-azure-900 dark:hover:text-azure-100"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {editFormData.interests?.length || 0} / 10 interests
+                    </p>
+                  </div>
+                </div>
+
+                {/* Academic Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Academic Information
+                  </h3>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      University
+                    </label>
+                    <select
+                      value={editFormData.university_id || ""}
+                      onChange={(e) => {
+                        const universityId = e.target.value
+                          ? parseInt(e.target.value)
+                          : undefined;
+                        setEditFormData({
+                          ...editFormData,
+                          university_id: universityId,
+                          faculty_id: undefined,
+                          department_id: undefined,
+                        });
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                    >
+                      <option value="">Select university</option>
+                      {universities.map((uni) => (
+                        <option key={uni.id} value={uni.id}>
+                          {uni.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {editFormData.university_id && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Faculty
+                      </label>
+                      <select
+                        value={editFormData.faculty_id || ""}
+                        onChange={(e) => {
+                          const facultyId = e.target.value
+                            ? parseInt(e.target.value)
+                            : undefined;
+                          setEditFormData({
+                            ...editFormData,
+                            faculty_id: facultyId,
+                            department_id: undefined,
+                          });
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                      >
+                        <option value="">Select faculty</option>
+                        {faculties.map((faculty) => (
+                          <option key={faculty.id} value={faculty.id}>
+                            {faculty.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {editFormData.faculty_id && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Department
+                      </label>
+                      <select
+                        value={editFormData.department_id || ""}
+                        onChange={(e) => {
+                          const departmentId = e.target.value
+                            ? parseInt(e.target.value)
+                            : undefined;
+                          setEditFormData({
+                            ...editFormData,
+                            department_id: departmentId,
+                          });
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                      >
+                        <option value="">Select department</option>
+                        {departments.map((dept) => (
+                          <option key={dept.id} value={dept.id}>
+                            {dept.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Student ID
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.student_id || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            student_id: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        maxLength={50}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Year of Study
+                      </label>
+                      <input
+                        type="number"
+                        value={editFormData.year_of_study || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            year_of_study: e.target.value
+                              ? parseInt(e.target.value)
+                              : undefined,
+                          })
+                        }
+                        min={1}
+                        max={10}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Social Links */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Social Links
+                  </h3>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      LinkedIn
+                    </label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="url"
+                        value={editFormData.social_links?.linkedin || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            social_links: {
+                              ...editFormData.social_links,
+                              linkedin: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        placeholder="https://linkedin.com/in/username"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Twitter
+                    </label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="url"
+                        value={editFormData.social_links?.twitter || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            social_links: {
+                              ...editFormData.social_links,
+                              twitter: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        placeholder="https://twitter.com/username"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      GitHub
+                    </label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="url"
+                        value={editFormData.social_links?.github || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            social_links: {
+                              ...editFormData.social_links,
+                              github: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        placeholder="https://github.com/username"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Portfolio
+                    </label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="url"
+                        value={editFormData.social_links?.portfolio || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            social_links: {
+                              ...editFormData.social_links,
+                              portfolio: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        placeholder="https://yourportfolio.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Facebook
+                    </label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="url"
+                        value={editFormData.social_links?.facebook || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            social_links: {
+                              ...editFormData.social_links,
+                              facebook: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        placeholder="https://facebook.com/username"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Instagram
+                    </label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="url"
+                        value={editFormData.social_links?.instagram || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            social_links: {
+                              ...editFormData.social_links,
+                              instagram: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        placeholder="https://instagram.com/username"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      TikTok
+                    </label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="url"
+                        value={editFormData.social_links?.tiktok || ""}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            social_links: {
+                              ...editFormData.social_links,
+                              tiktok: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
+                        placeholder="https://tiktok.com/@username"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Error Message */}
+                {updateProfileMutation.error && (
+                  <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p className="text-sm text-red-600 dark:text-red-400">
+                      {updateProfileMutation.error instanceof Error
+                        ? updateProfileMutation.error.message
+                        : "Failed to update profile. Please try again."}
+                    </p>
+                  </div>
+                )}
+
+                {/* Form Actions */}
+                <div className="flex gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="flex-1 px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updateProfileMutation.isPending}
+                    className="flex-1 px-6 py-3 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 text-white rounded-lg font-semibold transition-colors"
+                  >
+                    {updateProfileMutation.isPending
+                      ? "Saving..."
+                      : "Save Changes"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

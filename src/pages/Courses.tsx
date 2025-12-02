@@ -113,9 +113,9 @@ export const Courses = () => {
   });
 
   const { data: departments = [] } = useQuery({
-    queryKey: ["departments", filters.faculty_id],
-    queryFn: () => getDepartments(filters.faculty_id as number),
-    enabled: !!filters.faculty_id,
+    queryKey: ["departments", filters.university_id, filters.faculty_id],
+    queryFn: () => getDepartments(filters.university_id as number, filters.faculty_id as number),
+    enabled: !!filters.university_id && !!filters.faculty_id,
   });
 
   // Regular courses query (when not searching)

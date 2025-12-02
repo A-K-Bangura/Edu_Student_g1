@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, CheckCircle, Circle } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  CheckCircle,
+  Circle,
+  Lock,
+} from "lucide-react";
 import type { CourseOutline } from "../../types/lesson";
 
 interface OutlineSidebarProps {
@@ -98,26 +104,41 @@ export const OutlineSidebar = ({
                     {module.lessons.map((lesson) => {
                       const isCurrent = lesson.id === currentLessonId;
                       const isCompleted = lesson.is_completed;
+                      const isLocked = lesson.is_locked ?? false;
 
                       return (
                         <div key={lesson.id}>
                           <button
-                            onClick={() => onNavigate(module.id, lesson.id)}
+                            onClick={() => {
+                              if (!isLocked) {
+                                onNavigate(module.id, lesson.id);
+                              }
+                            }}
+                            disabled={isLocked}
                             className={`
                               w-full flex items-center gap-2 p-2 rounded-lg text-left transition-colors
                               ${
-                                isCurrent
+                                isLocked
+                                  ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
+                                  : isCurrent
                                   ? "bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300"
                                   : isCompleted
                                   ? "hover:bg-green-50 dark:hover:bg-green-900/20 text-green-700 dark:text-green-300"
                                   : "hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                               }
                             `}
+                            title={
+                              isLocked
+                                ? "Complete previous lessons to unlock"
+                                : undefined
+                            }
                           >
-                            {isCompleted ? (
-                              <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 fill-current" />
+                            {isLocked ? (
+                              <Lock className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                            ) : isCompleted ? (
+                              <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 fill-current" />
                             ) : (
-                              <Circle className="w-4 h-4 flex-shrink-0" />
+                              <Circle className="w-4 h-4 shrink-0" />
                             )}
                             <span className="text-sm truncate">
                               {lesson.title}

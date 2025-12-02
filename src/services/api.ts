@@ -15,7 +15,10 @@ export const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem("auth_token");
+    // Check for pending token first (for onboarding flow), then main auth token
+    const token =
+      localStorage.getItem("pending_auth_token") ||
+      localStorage.getItem("auth_token");
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -28,10 +31,21 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
+    // Only redirect on 401 if we're not already on the login page
+    // This prevents redirect loops and allows login errors to be displayed
     if (error.response?.status === 401) {
-      // Handle unauthorized - clear token and redirect to login
-      localStorage.removeItem("auth_token");
-      window.location.href = "/auth/login";
+      const currentPath = window.location.pathname;
+      const isLoginPage =
+        currentPath === "/auth/login" || currentPath.includes("/auth/login");
+
+      if (!isLoginPage) {
+        // Handle unauthorized - clear all tokens and redirect to login
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("pending_auth_token");
+        localStorage.removeItem("user");
+        localStorage.removeItem("pending_user");
+        window.location.href = "/auth/login";
+      }
     }
     return Promise.reject(error);
   }

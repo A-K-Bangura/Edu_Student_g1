@@ -16,19 +16,27 @@ import {
   XCircle,
   AlertCircle,
 } from "lucide-react";
-import { getLessonDetail } from "../services/lessons";
+import { getLessonDetail, SequentialAccessError } from "../services/lessons";
 import {
   getCourseDetail,
   getCourseProgress,
   updateCourseProgress,
 } from "../services/courses";
+import { getUserProfile } from "../services/profile";
 import { useUIStore } from "../store/uiStore";
 import { debugLog } from "../utils/debug";
 import { QuizRenderer } from "../components/course/QuizRenderer";
 import type { QuizAttemptMeta } from "../components/course/QuizRenderer";
-import type { MiniLesson } from "../types/lesson";
+import type { MiniLesson, LessonDetail } from "../types/lesson";
 import type { CourseProgress } from "../types/course";
 import type { Quiz, QuizSubmission, QuizResult } from "../types/quiz";
+import type { UserProfile } from "../types/profile";
+import {
+  DEFAULT_INSPO_TYPE,
+  getRandomInspirationMessage,
+  isValidInspirationType,
+  type InspoType,
+} from "../constants/inspirationMessages";
 
 export const CoursePlayer = () => {
   const { courseId, lessonId } = useParams<{
@@ -65,6 +73,7 @@ export const CoursePlayer = () => {
     progress: CourseProgress;
     courseCompleted: boolean;
   } | null>(null);
+  const [inspirationMessage, setInspirationMessage] = useState("");
 
   const navigationState = useMemo(() => {
     return (
@@ -96,12 +105,81 @@ export const CoursePlayer = () => {
     enabled: !!courseId,
   });
 
+  // State for sequential access error
+  const [sequentialAccessError, setSequentialAccessError] = useState<{
+    message: string;
+    details?: {
+      message?: string;
+      lesson_order?: number;
+      module_id?: number;
+      module_order?: number;
+    };
+  } | null>(null);
+
   // Fetch lesson detail when lesson ID is available
-  const { data: lessonDetail, isLoading } = useQuery({
+  const {
+    data: lessonDetail,
+    isLoading,
+    error: lessonError,
+  } = useQuery<LessonDetail>({
     queryKey: ["lesson-detail", activeLessonId],
     queryFn: () => getLessonDetail(activeLessonId!),
     enabled: !!activeLessonId,
+    retry: false, // Don't retry on sequential access errors
   });
+
+  // Fetch user profile for personalized messaging
+  const { data: userProfile } = useQuery<UserProfile>({
+    queryKey: ["user-profile"],
+    queryFn: getUserProfile,
+  });
+
+  const studentName = useMemo(() => {
+    if (!userProfile) {
+      return undefined;
+    }
+
+    if (userProfile.full_name && userProfile.full_name.trim()) {
+      return userProfile.full_name.trim();
+    }
+
+    const firstname = userProfile.firstname?.trim();
+    const lastname = userProfile.lastname?.trim();
+    if (firstname || lastname) {
+      return [firstname, lastname].filter(Boolean).join(" ").trim();
+    }
+
+    return userProfile.email?.split("@")?.[0];
+  }, [userProfile]);
+
+  const inspirationType = useMemo<InspoType>(() => {
+    const preferences = userProfile?.preferences as
+      | { inspo_type?: unknown }
+      | undefined;
+    const prefValue = preferences?.inspo_type;
+    return isValidInspirationType(prefValue) ? prefValue : DEFAULT_INSPO_TYPE;
+  }, [userProfile]);
+
+  // Handle sequential access errors
+  useEffect(() => {
+    if (lessonError instanceof SequentialAccessError) {
+      setSequentialAccessError({
+        message: lessonError.message,
+        details: lessonError.details,
+      });
+    } else if (lessonError) {
+      setSequentialAccessError(null);
+    }
+  }, [lessonError]);
+
+  useEffect(() => {
+    if (showCompletionModal && lessonCompletion) {
+      const message = getRandomInspirationMessage(inspirationType, studentName);
+      setInspirationMessage(message);
+    } else if (!showCompletionModal) {
+      setInspirationMessage("");
+    }
+  }, [showCompletionModal, lessonCompletion, inspirationType, studentName]);
 
   const detailModules = courseDetail?.modules || [];
   const detailHasLessons = detailModules.some(
@@ -150,40 +228,92 @@ export const CoursePlayer = () => {
     }
 
     return {
-      modules: modulesSource.map((module) => {
-        const moduleLessons = (module.lessons || []).map((lesson) => {
-          const isLessonCompleted = completedLessonIds.has(lesson.id);
+      modules: modulesSource.map((module, moduleIndex) => {
+        const moduleLessons = (module.lessons || []).map(
+          (lesson, lessonIndex) => {
+            const isLessonCompleted = completedLessonIds.has(lesson.id);
 
-          // Get quizzes for this lesson from lessonDetail if it's the current lesson
-          let lessonQuizzes:
-            | Array<{
-                id: number;
-                title?: string;
-                order_index: number;
-                is_completed: boolean;
-              }>
-            | undefined;
-          if (
-            lessonDetail &&
-            lessonDetail.id === lesson.id &&
-            lessonDetail.quizzes
-          ) {
-            lessonQuizzes = lessonDetail.quizzes.map((quiz) => ({
-              id: quiz.id,
-              title: quiz.question || quiz.title || `Quiz ${quiz.order_index}`,
-              order_index: quiz.order_index ?? 0,
-              is_completed: completedQuizIds.has(quiz.id),
-            }));
+            // Determine if lesson is locked based on sequential access rules
+            // First lesson in first module is always accessible
+            // Other lessons require all previous lessons in same module to be completed
+            // Lessons in new modules require all lessons in all previous modules to be completed
+            let isLocked = false;
+
+            if (moduleIndex === 0 && lessonIndex === 0) {
+              // First lesson in first module - always accessible
+              isLocked = false;
+            } else if (moduleIndex === 0) {
+              // Other lessons in first module - check if all previous lessons are completed
+              const previousLessons =
+                module.lessons?.slice(0, lessonIndex) || [];
+              isLocked = !previousLessons.every((prevLesson) =>
+                completedLessonIds.has(prevLesson.id)
+              );
+            } else {
+              // Lessons in subsequent modules
+              // First check if all previous modules are fully completed
+              const previousModules = modulesSource.slice(0, moduleIndex);
+              const allPreviousModulesCompleted = previousModules.every(
+                (prevModule) => {
+                  const prevModuleLessons = prevModule.lessons || [];
+                  return (
+                    prevModuleLessons.length > 0 &&
+                    prevModuleLessons.every((prevLesson) =>
+                      completedLessonIds.has(prevLesson.id)
+                    )
+                  );
+                }
+              );
+
+              if (!allPreviousModulesCompleted) {
+                // Previous modules not completed - lesson is locked
+                isLocked = true;
+              } else if (lessonIndex === 0) {
+                // First lesson in module - accessible if previous modules completed
+                isLocked = false;
+              } else {
+                // Other lessons in module - check if all previous lessons in same module are completed
+                const previousLessons =
+                  module.lessons?.slice(0, lessonIndex) || [];
+                isLocked = !previousLessons.every((prevLesson) =>
+                  completedLessonIds.has(prevLesson.id)
+                );
+              }
+            }
+
+            // Get quizzes for this lesson from lessonDetail if it's the current lesson
+            let lessonQuizzes:
+              | Array<{
+                  id: number;
+                  title?: string;
+                  order_index: number;
+                  is_completed: boolean;
+                }>
+              | undefined;
+            if (
+              lessonDetail &&
+              lessonDetail.id === lesson.id &&
+              lessonDetail.quizzes
+            ) {
+              lessonQuizzes = lessonDetail.quizzes.map((quiz) => ({
+                id: quiz.id,
+                title:
+                  quiz.question || quiz.title || `Quiz ${quiz.order_index}`,
+                order_index: quiz.order_index ?? 0,
+                is_completed: completedQuizIds.has(quiz.id),
+              }));
+            }
+
+            return {
+              id: lesson.id,
+              title: lesson.title,
+              order_index: lesson.order_index,
+              is_completed: isLessonCompleted,
+              is_locked: isLocked,
+              quizzes: lessonQuizzes,
+            };
           }
-
-          return {
-            id: lesson.id,
-            title: lesson.title,
-            order_index: lesson.order_index,
-            is_completed: isLessonCompleted,
-            quizzes: lessonQuizzes,
-          };
-        });
+        );
 
         // Module is completed if all lessons are completed
         // Note: We'd need quiz data for all lessons to fully determine module completion
@@ -344,8 +474,23 @@ export const CoursePlayer = () => {
 
   // Navigate to different lesson
   const handleLessonNavigate = (moduleId: number, lessonId: number) => {
+    // Check if lesson is locked in outline
+    const targetModule = outline?.modules.find((m) => m.id === moduleId);
+    const targetLesson = targetModule?.lessons.find((l) => l.id === lessonId);
+
+    if (targetLesson?.is_locked) {
+      // Don't navigate to locked lessons
+      debugLog("CoursePlayer", "Attempted to navigate to locked lesson", {
+        courseId,
+        moduleId,
+        lessonId,
+      });
+      return;
+    }
+
     setIsSidebarOpen(false);
     setCurrentScreenIndex(0);
+    setSequentialAccessError(null); // Clear any previous errors
     debugLog("CoursePlayer", "Navigating to lesson", {
       courseId,
       moduleId,
@@ -942,13 +1087,72 @@ export const CoursePlayer = () => {
     ? renderQuizFeedback(currentQuiz.id)
     : null;
 
+  // Show sequential access error if present
+  if (sequentialAccessError && !isLoading) {
+    return (
+      <PageShell showTopNav={false}>
+        <div className="flex justify-center items-center h-screen bg-gray-50 dark:bg-gray-900">
+          <div className="max-w-2xl w-full mx-4">
+            <div className="bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-lg shadow-lg p-8">
+              <div className="flex items-start gap-4">
+                <div className="shrink-0">
+                  <AlertCircle className="w-12 h-12 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                    Lesson Locked
+                  </h2>
+                  <p className="text-gray-700 dark:text-gray-300 mb-4">
+                    {sequentialAccessError.message ||
+                      "You must complete all previous lessons before accessing this lesson."}
+                  </p>
+                  {sequentialAccessError.details?.message && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      {sequentialAccessError.details.message}
+                    </p>
+                  )}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        // Navigate to first incomplete lesson
+                        if (findFirstIncompleteLesson) {
+                          navigate(
+                            `/course/${courseId}/module/${findFirstIncompleteLesson.moduleId}/lesson/${findFirstIncompleteLesson.lessonId}`,
+                            { replace: true }
+                          );
+                        } else {
+                          navigate(`/course/${courseId}`, { replace: true });
+                        }
+                      }}
+                      className="px-6 py-2 bg-azure-500 hover:bg-azure-600 text-white rounded-lg font-medium transition-colors"
+                    >
+                      Go to Next Available Lesson
+                    </button>
+                    <button
+                      onClick={() =>
+                        navigate(`/course/${courseId}`, { replace: true })
+                      }
+                      className="px-6 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+                    >
+                      Back to Course
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </PageShell>
+    );
+  }
+
   // Loading state
   if (isLoading || !lessonContent) {
     return (
       <PageShell showTopNav={false}>
         <div className="flex justify-center items-center h-screen">
           <div className="animate-pulse text-gray-600 dark:text-gray-400">
-            Loading lesson blah blah blah...
+            Loading lesson...
           </div>
         </div>
       </PageShell>
@@ -1159,7 +1363,7 @@ export const CoursePlayer = () => {
             <div className="absolute bottom-0 right-0 w-32 h-32 bg-azure-500/30 rounded-full blur-3xl animate-pulse" />
             <div className="absolute top-1/3 right-1/4 w-20 h-20 bg-rose-500/30 rounded-full blur-3xl animate-pulse" />
           </div>
-          <div className="relative w-full max-w-xl px-6 py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/40 dark:border-gray-700">
+          <div className="relative w-[92%] md:max-w-xl mx-auto px-6 py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/40 dark:border-gray-700">
             <div className="flex justify-center mb-6">
               <div className="w-20 h-20 rounded-full bg-linear-to-br from-azure-500 via-rose-500 to-amber-500 flex items-center justify-center animate-bounce shadow-lg">
                 <CheckCircle className="w-10 h-10 text-white" />
@@ -1168,27 +1372,27 @@ export const CoursePlayer = () => {
             <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-3">
               Lesson Complete!
             </h2>
-            <p className="text-center text-gray-600 dark:text-gray-300 mb-6">
+            {/* <p className="text-center text-gray-600 dark:text-gray-300 mb-6">
               {lessonCompletion?.courseCompleted
                 ? "You’ve completed every lesson in this course. Outstanding work!"
                 : "Fantastic job! You’re building momentum—keep the streak going."}
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4 text-center">
-                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  XP Earned
+            </p> */}
+            <div className="grid grid-cols-1 gap-2 mb-4">
+              <div className=" rounded-xl text-center">
+                <p className="text-[.75rem] uppercase ml-2 inline-block tracking-wide text-gray-500 dark:text-gray-400">
+                  XP Earned:
                 </p>
-                <p className="text-2xl font-semibold text-amber-600 dark:text-amber-400">
+                <p className="text-lg inline font-semibold text-amber-600 dark:text-amber-400">
                   {lessonCompletion?.progress?.xp_earned ??
                     lessonCompletion?.progress?.xp_awarded ??
                     0}
                 </p>
               </div>
-              <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4 text-center">
-                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Course Progress
+              <div className=" rounded-xl text-center">
+                <p className="text-xs uppercase inline-block tracking-wide text-gray-500 dark:text-gray-400">
+                  Course Progress:
                 </p>
-                <p className="text-2xl font-semibold text-azure-600 dark:text-azure-400">
+                <p className="text-lg inline font-semibold text-azure-600 dark:text-azure-400">
                   {(() => {
                     const raw =
                       lessonCompletion?.progress?.progress_percentage ??
@@ -1204,18 +1408,17 @@ export const CoursePlayer = () => {
                   })()}
                 </p>
               </div>
-              <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4 text-center">
-                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Current Streak
+              <div className=" rounded-xl text-center">
+                <p className="text-xs uppercase inline-block tracking-wide text-gray-500 dark:text-gray-400">
+                  Current Streak:
                 </p>
-                <p className="text-2xl font-semibold text-rose-600 dark:text-rose-400">
+                <p className="text-lg inline font-semibold text-rose-600 dark:text-rose-400">
                   {lessonCompletion?.progress?.streak_count ?? 0}
                 </p>
               </div>
             </div>
             <blockquote className="text-center italic text-gray-700 dark:text-gray-300 mb-6">
-              “Success is the sum of small efforts, repeated day in and day
-              out.”
+              {inspirationMessage || "Keep going—you've got this!"}
             </blockquote>
             <div className="flex flex-col sm:flex-row gap-3">
               <button
