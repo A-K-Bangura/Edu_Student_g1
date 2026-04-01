@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Trophy, Flame, Award } from "lucide-react";
 import type { Badge } from "../../types/dashboard";
 import { formatXP } from "../../utils/format";
+import successIcon from "../../assets/animations/SuccessCheck.webm";
 
 interface CompletionModalProps {
   xpGained: number;
@@ -71,8 +72,8 @@ export const CompletionModal = ({
 
         <div className="p-8 text-center">
           {/* Success Icon */}
-          <div className="w-24 h-24 bg-gradient-to-br from-azure-500 to-blue-violet-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-in zoom-in duration-500">
-            <Trophy className="w-12 h-12 text-white" />
+          <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 animate-in zoom-in duration-500">
+            <video src={successIcon} autoPlay loop muted className="w-24 h-24 object-contain" />
           </div>
 
           {/* Title */}

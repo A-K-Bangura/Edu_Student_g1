@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Home, BookOpen, Trophy, User, MessageSquare } from "lucide-react";
 import { useUIStore } from "../../store/uiStore";
+import logoMain from "../../assets/logo/univybe_logo_main.png";
 
 export const TopNav = () => {
   const darkMode = useUIStore((state) => state.darkMode);
@@ -18,12 +19,12 @@ export const TopNav = () => {
       <div className="max-w-7xl mx-auto w-full px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to="/dashboard" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-azure-500 to-blue-violet-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xl">EL</span>
+          <Link to="/dashboard" className="flex items-center gap-1">
+            <div className="w-20 h-10 rounded-lg flex items-center justify-center">
+              <img src={logoMain} alt="logo" className="w-15 h-15" />
             </div>
-            <span className="text-xl font-bold text-gray-900 dark:text-white">
-              EduLift Sierra
+            <span className="text-[1.8em] font-bold text-gray-900 dark:text-white">
+              UniVybe
             </span>
           </Link>
 

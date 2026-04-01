@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, BookOpen, Trophy, User, MessageSquare } from "lucide-react";
-
+// import logoMain from "../../assets/logo/univybe_logo_main.png";
 export const BottomNav = () => {
   const location = useLocation();
 

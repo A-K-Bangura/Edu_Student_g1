@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { Mail, AlertCircle, CheckCircle } from "lucide-react";
+import logoMain from "../../assets/logo/univybe_logo_main.png";
 
 export const Signup = () => {
   const { signup, isLoading, error } = useAuth();
@@ -62,13 +63,13 @@ export const Signup = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-12">
       <div className="max-w-md w-full">
         {/* Logo */}
-        <div className="flex justify-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-azure-500 to-blue-violet-500 rounded-2xl flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-2xl">EL</span>
+        <div className="flex justify-center mb-2">
+          <div className="w-40 h-40 rounded-2xl flex items-center justify-center">
+            <img src={logoMain} alt="logo" className="w-40 h-40" /> 
           </div>
         </div>
 
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
           Create Account
         </h1>
         <p className="text-gray-600 dark:text-gray-400 text-center mb-8">

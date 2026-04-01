@@ -37,6 +37,8 @@ import {
   isValidInspirationType,
   type InspoType,
 } from "../constants/inspirationMessages";
+import confettiVideo from "../assets/animations/Confetti.webm";
+import successIcon from "../assets/animations/SuccessCheck.webm";
 
 export const CoursePlayer = () => {
   const { courseId, lessonId } = useParams<{
@@ -416,6 +418,23 @@ export const CoursePlayer = () => {
       : "Complete Lesson"
     : "Next";
 
+  // Check if current lesson is the last lesson in the last module (course completion)
+  const isLastLessonInCourse = useMemo(() => {
+    if (!modulesSource.length || !activeLessonId) {
+      return false;
+    }
+
+    const modules = modulesSource;
+    const lastModule = modules[modules.length - 1];
+
+    if (!lastModule || !lastModule.lessons || lastModule.lessons.length === 0) {
+      return false;
+    }
+
+    const lastLesson = lastModule.lessons[lastModule.lessons.length - 1];
+    return lastLesson.id === activeLessonId;
+  }, [modulesSource, activeLessonId]);
+
   const nextLessonLink = useMemo(() => {
     if (!modulesSource.length || !activeLessonId) {
       return null;
@@ -453,7 +472,8 @@ export const CoursePlayer = () => {
             break outer;
           }
 
-          nextLessonRoute = `/course/${courseId}/completed`;
+          // No next lesson - this is the last lesson
+          nextLessonRoute = null;
           break outer;
         }
       }
@@ -893,12 +913,14 @@ export const CoursePlayer = () => {
     setLessonCompletionStatus("idle");
     setLessonCompletionError(null);
 
-    if (lessonCompletion?.courseCompleted) {
-      navigate(`/course/${courseId}/completed`, { replace: true });
+    // If course is completed or it's the last lesson, go to course details page
+    if (lessonCompletion?.courseCompleted || isLastLessonInCourse) {
+      navigate(`/course/${courseId}`, { replace: true });
     } else if (nextLessonLink) {
       navigate(nextLessonLink, { replace: true });
     } else {
-      navigate(`/course/${courseId}/completed`, { replace: true });
+      // Fallback to course details page
+      navigate(`/course/${courseId}`, { replace: true });
     }
 
     setLessonCompletion(null);
@@ -1358,25 +1380,44 @@ export const CoursePlayer = () => {
       </div>
       {showCompletionModal && lessonCompletion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          {/* Confetti animation for course completion */}
+          {(lessonCompletion?.courseCompleted || isLastLessonInCourse) && (
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+            >
+              <source src={confettiVideo} type="video/webm" />
+            </video>
+          )}
           <div className="absolute inset-0 pointer-events-none select-none">
             <div className="absolute -top-10 left-1/4 w-24 h-24 bg-amber-400/40 rounded-full blur-3xl animate-pulse" />
             <div className="absolute bottom-0 right-0 w-32 h-32 bg-azure-500/30 rounded-full blur-3xl animate-pulse" />
             <div className="absolute top-1/3 right-1/4 w-20 h-20 bg-rose-500/30 rounded-full blur-3xl animate-pulse" />
           </div>
-          <div className="relative w-[92%] md:max-w-xl mx-auto px-6 py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/40 dark:border-gray-700">
-            <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 rounded-full bg-linear-to-br from-azure-500 via-rose-500 to-amber-500 flex items-center justify-center animate-bounce shadow-lg">
-                <CheckCircle className="w-10 h-10 text-white" />
-              </div>
-            </div>
+          <div className="relative z-10 w-[92%] md:max-w-xl mx-auto px-6 py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/40 dark:border-gray-700">
+          <div className="flex justify-center mb-6"> <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-24 h-24 object-contain"
+            >
+              <source src={successIcon} type="video/webm" />
+            </video>
+          </div>
             <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-3">
-              Lesson Complete!
+              {lessonCompletion?.courseCompleted || isLastLessonInCourse
+                ? "Course Completed!"
+                : "Lesson Complete!"}
             </h2>
-            {/* <p className="text-center text-gray-600 dark:text-gray-300 mb-6">
-              {lessonCompletion?.courseCompleted
-                ? "You’ve completed every lesson in this course. Outstanding work!"
-                : "Fantastic job! You’re building momentum—keep the streak going."}
-            </p> */}
+            {lessonCompletion?.courseCompleted || isLastLessonInCourse ? (
+              <p className="text-center text-gray-600 dark:text-gray-300 mb-6">
+                Outstanding work! You've completed every lesson in this course.
+              </p>
+            ) : null}
             <div className="grid grid-cols-1 gap-2 mb-4">
               <div className=" rounded-xl text-center">
                 <p className="text-[.75rem] uppercase ml-2 inline-block tracking-wide text-gray-500 dark:text-gray-400">
@@ -1417,17 +1458,19 @@ export const CoursePlayer = () => {
                 </p>
               </div>
             </div>
-            <blockquote className="text-center italic text-gray-700 dark:text-gray-300 mb-6">
-              {inspirationMessage || "Keep going—you've got this!"}
-            </blockquote>
+            {!(lessonCompletion?.courseCompleted || isLastLessonInCourse) && (
+              <blockquote className="text-center italic text-gray-700 dark:text-gray-300 mb-6">
+                {inspirationMessage || "Keep going—you've got this!"}
+              </blockquote>
+            )}
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 type="button"
                 onClick={handleCompletionContinue}
-                className="flex-1 px-6 py-3 bg-linear-to-r from-azure-500 via-rose-500 to-amber-500 hover:from-azure-600 hover:via-rose-600 hover:to-amber-600 text-white rounded-xl font-semibold shadow-lg transition-transform transform hover:-translate-y-0.5"
+                className="flex-1 px-6 py-3 bg-linear-to-r from-azure-500 to-blue-violet-600 hover:from-azure-600 hover:to-blue-violet-600 text-white rounded-xl font-semibold shadow-lg transition-transform transform hover:-translate-y-0.5"
               >
-                {lessonCompletion?.courseCompleted
-                  ? "View Course Summary"
+                {lessonCompletion?.courseCompleted || isLastLessonInCourse
+                  ? "Finish"
                   : "Continue Learning"}
               </button>
             </div>
