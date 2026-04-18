@@ -7,6 +7,7 @@ import type {
   Organization,
   OnboardingData,
   OnboardingResponse,
+  AcademicLevel,
 } from "../types/onboarding";
 
 // Get all universities
@@ -71,13 +72,18 @@ export const submitOnboarding = async (
   return response.data.data;
 };
 
+/** Draft payload allows unset level while Partial<OnboardingData> does not */
+export type OnboardingDraftPayload = Omit<Partial<OnboardingData>, "level"> & {
+  level?: AcademicLevel | "";
+};
+
 // Auto-save draft to localStorage
-export const saveDraft = (data: Partial<OnboardingData>): void => {
+export const saveDraft = (data: OnboardingDraftPayload): void => {
   localStorage.setItem("onboarding_draft", JSON.stringify(data));
 };
 
 // Get saved draft from localStorage
-export const getDraft = (): Partial<OnboardingData> | null => {
+export const getDraft = (): OnboardingDraftPayload | null => {
   const draft = localStorage.getItem("onboarding_draft");
   return draft ? JSON.parse(draft) : null;
 };

@@ -20,7 +20,10 @@ import {
   clearDraft,
 } from "../services/onboarding";
 import { completeOnboarding } from "../services/auth";
-import type { OnboardingData } from "../types/onboarding";
+import type {
+  OnboardingData,
+  OnboardingDraftLevel,
+} from "../types/onboarding";
 import type { CompleteOnboardingData } from "../services/auth";
 
 const steps = [
@@ -36,7 +39,8 @@ export const Onboarding = () => {
 
   // Form data
   const [formData, setFormData] = useState<
-    OnboardingData & {
+    Omit<OnboardingData, "level"> & {
+      level: OnboardingDraftLevel;
       date_of_birth?: string;
       gender?: "male" | "female" | "other";
       student_id?: string;
@@ -113,7 +117,8 @@ export const Onboarding = () => {
   // Submit mutation
   const submitMutation = useMutation({
     mutationFn: async (
-      data: OnboardingData & {
+      data: Omit<OnboardingData, "level"> & {
+        level: OnboardingDraftLevel;
         date_of_birth?: string;
         gender?: "male" | "female" | "other";
         student_id?: string;
@@ -122,12 +127,16 @@ export const Onboarding = () => {
         bio?: string;
       }
     ) => {
+      if (!data.level) {
+        throw new Error("Level is required");
+      }
+      const level = data.level;
       // Convert to CompleteOnboardingData format
       const onboardingData: CompleteOnboardingData = {
         firstname: data.firstname,
         lastname: data.lastname,
         phone: data.phone,
-        level: data.level,
+        level,
         password: data.password || "",
         password_confirmation: data.password_confirmation || "",
       };
@@ -138,13 +147,13 @@ export const Onboarding = () => {
       if (data.bio) onboardingData.bio = data.bio;
 
       // Add fields based on level type
-      if (isRegularLevel(data.level)) {
+      if (isRegularLevel(level)) {
         // For levels 100-500: require university, faculty, department, student_id
         onboardingData.university_id = data.university_id as number;
         onboardingData.faculty_id = data.faculty_id as number;
         onboardingData.department_id = data.department_id as number;
         if (data.student_id) onboardingData.student_id = data.student_id;
-      } else if (isSpecialLevel(data.level)) {
+      } else if (isSpecialLevel(level)) {
         // For UnderGrad/graduate: organization is optional
         if (data.organization_id) {
           onboardingData.organization_id = data.organization_id as number;

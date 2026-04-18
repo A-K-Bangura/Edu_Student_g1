@@ -147,7 +147,7 @@ export const sharePost = async (
     throw new Error(response.data.message || "Failed to share post");
   }
 
-  return response.data.data || [];
+  return response.data.data ?? { shared: false };
 };
 
 // Get remaining feed time

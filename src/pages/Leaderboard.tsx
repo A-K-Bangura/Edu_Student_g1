@@ -30,7 +30,6 @@ import type {
   AchievementLeaderboard,
   LeaderboardEntry,
 } from "../types/leaderboard";
-import type { UserProfile } from "../types/profile";
 
 type LeaderboardType =
   | "overall"

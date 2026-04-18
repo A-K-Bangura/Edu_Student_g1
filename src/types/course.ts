@@ -91,8 +91,11 @@ export interface CourseProgress {
   student_id: number;
   progress_percentage: number;
   progress_percent?: number | string;
-  completed_lessons: number;
-  completed_quizzes: number;
+  /** API may return aggregate counts or ID lists */
+  completed_lessons: number | number[];
+  completed_quizzes:
+    | number
+    | Array<{ quiz_id: number; completed_at: string }>;
   quizzes_passed?: number;
   streak_count?: number;
   xp_earned?: number;
@@ -104,8 +107,6 @@ export interface CourseProgress {
   enrolled_at?: string;
   last_lesson_id?: number | null;
   last_module_id?: number | null;
-  completed_lessons?: number[];
-  completed_quizzes?: Array<{ quiz_id: number; completed_at: string }>;
   course?: {
     id: number;
     title: string;

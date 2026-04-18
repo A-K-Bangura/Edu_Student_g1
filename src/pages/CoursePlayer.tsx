@@ -212,14 +212,16 @@ export const CoursePlayer = () => {
     // completed_quizzes is an array of objects: Array<{quiz_id: number, completed_at: string}>
     const quizzes = courseProgress.completed_quizzes;
     if (Array.isArray(quizzes)) {
-      return new Set(
-        quizzes
-          .filter(
-            (q): q is { quiz_id: number } =>
-              typeof q === "object" && q !== null && "quiz_id" in q
-          )
-          .map((q) => q.quiz_id)
-      );
+      const ids = quizzes
+        .filter(
+          (q) =>
+            typeof q === "object" &&
+            q !== null &&
+            "quiz_id" in q &&
+            typeof (q as { quiz_id: unknown }).quiz_id === "number"
+        )
+        .map((q) => (q as { quiz_id: number }).quiz_id);
+      return new Set(ids);
     }
     return new Set<number>();
   }, [courseProgress?.completed_quizzes]);

@@ -58,12 +58,15 @@ export interface TrendingPost {
   trending_score: number;
 }
 
-export interface PostDetail extends FeedPost {
-  likes?: Array<{
-    id: number;
-    user: PostAuthor;
-    created_at: string;
-  }>;
+export interface PostDetail extends Omit<FeedPost, "likes"> {
+  likes?: Array<
+    | NonNullable<FeedPost["likes"]>[number]
+    | {
+        id: number;
+        user: PostAuthor;
+        created_at: string;
+      }
+  >;
   comments?: PostComment[];
 }
 

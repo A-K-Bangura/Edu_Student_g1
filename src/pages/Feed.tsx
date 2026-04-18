@@ -4,6 +4,7 @@ import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
+  type InfiniteData,
 } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
@@ -38,7 +39,9 @@ import type {
   PostType,
   PostAuthor,
   FeedPost,
+  PostComment,
 } from "../types/feed";
+import type { PaginatedResponse } from "../types";
 import type { PostSearchItem } from "../types/search";
 
 export const Feed = () => {
@@ -57,7 +60,6 @@ export const Feed = () => {
     {}
   );
   const [activeAuthor, setActiveAuthor] = useState<PostAuthor | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [showLockModal, setShowLockModal] = useState(false);
   const [feedLocked, setFeedLocked] = useState(false);
   const feedTimeIntervalRef = useRef<number | null>(null);
@@ -162,13 +164,20 @@ export const Feed = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useInfiniteQuery({
+  } = useInfiniteQuery<
+    PaginatedResponse<FeedPost>,
+    Error,
+    InfiniteData<PaginatedResponse<FeedPost>>,
+    [string, FeedFilters],
+    number
+  >({
     queryKey: ["feed-posts", filters],
-    queryFn: async ({ pageParam = 1 }) => {
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
       try {
         return await getFeedPosts({
           ...filters,
-          page: pageParam as number,
+          page: pageParam,
         });
       } catch (error: any) {
         // Handle FEED_LOCKED error
@@ -468,7 +477,9 @@ export const Feed = () => {
   const posts =
     isSearchMode && searchResults
       ? searchResults.results.map(convertSearchItemToPost)
-      : feedData?.pages.flatMap((page) => page.data) || [];
+      : feedData?.pages.flatMap(
+          (page: PaginatedResponse<FeedPost>) => page.data
+        ) || [];
 
   // Automatically load more posts when the user reaches the bottom sentinel
   useEffect(() => {
@@ -752,7 +763,7 @@ export const Feed = () => {
                   )}
                   {post.tags && post.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-3">
-                      {post.tags.map((tag, index) => (
+                      {post.tags.map((tag: string, index: number) => (
                         <span
                           key={index}
                           className="px-2 py-1 bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300 rounded text-sm"
@@ -839,7 +850,7 @@ export const Feed = () => {
                   <div className="mt-4 space-y-4">
                     {post.comments && post.comments.length > 0 ? (
                       <div className="space-y-3">
-                        {post.comments.map((c) => (
+                        {post.comments.map((c: PostComment) => (
                           <div key={c.id} className="flex items-start gap-3">
                             <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
                               {(c.user as any)?.avatar_url ? (

@@ -87,11 +87,30 @@ export const getCourseDetail = async (
 
   const { course, is_enrolled, progress } = response.data.data;
 
+  const mergedProgress =
+    progress !== undefined
+      ? {
+          progress_percentage:
+            progress.progress_percentage ??
+            course.progress?.progress_percentage ??
+            0,
+          completed_lessons:
+            progress.completed_lessons ?? course.progress?.completed_lessons ?? 0,
+          completed_quizzes:
+            progress.completed_quizzes ?? course.progress?.completed_quizzes ?? 0,
+          is_completed:
+            progress.is_completed ?? course.progress?.is_completed ?? false,
+          last_activity_at:
+            progress.last_activity_at ?? course.progress?.last_activity_at,
+          enrolled_at: progress.enrolled_at ?? course.progress?.enrolled_at,
+        }
+      : course.progress;
+
   // Merge is_enrolled and progress into the course object
   return {
     ...course,
     is_enrolled: is_enrolled ?? course.is_enrolled,
-    progress: progress ?? course.progress,
+    progress: mergedProgress,
   };
 };
 

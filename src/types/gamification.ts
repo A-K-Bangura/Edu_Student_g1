@@ -174,8 +174,8 @@ export interface XPHistory {
 
 // Achievement Requirement
 export interface AchievementRequirement {
-  [key: string]: number;
   current?: number;
+  [key: string]: number | undefined;
 }
 
 // Achievement
