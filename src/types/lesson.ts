@@ -18,7 +18,8 @@ export type MiniLessonTextType =
   | "plain"
   | "remember"
   | "simply_put"
-  | "important";
+  | "important"
+  | "formula";
 
 export interface MiniLessonBlock {
   id: number;

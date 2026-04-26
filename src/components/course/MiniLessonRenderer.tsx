@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactElement } from "react";
+import katex from "katex";
 import type {
   MiniLesson,
   MiniLessonBlock,
@@ -97,6 +98,33 @@ const TextBlock = ({
     );
   }
 
+  if (textType === "formula") {
+    try {
+      const renderedFormula = katex.renderToString(content, {
+        displayMode: true,
+        throwOnError: false,
+        errorColor: "#cc0000",
+      });
+
+      return (
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+          <div
+            className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 px-4 py-3"
+            role="math"
+            aria-label="Formula"
+            dangerouslySetInnerHTML={{ __html: renderedFormula }}
+          />
+        </div>
+      );
+    } catch {
+      return (
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+          Unable to display formula.
+        </div>
+      );
+    }
+  }
+
   const styles: Record<MiniLessonTextType, string> = {
     remember:
       "bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-800",
@@ -104,6 +132,7 @@ const TextBlock = ({
       "bg-sky-50 border border-sky-200 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200 dark:border-sky-800",
     important:
       "bg-rose-50 border border-rose-200 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200 dark:border-rose-800",
+    formula: "",
     plain: "", // handled earlier
   } as const;
 
@@ -111,6 +140,7 @@ const TextBlock = ({
     remember: <Sparkles className="w-4 h-4" />,
     simply_put: <Info className="w-4 h-4" />,
     important: <AlertTriangle className="w-4 h-4" />,
+    formula: <FileText className="w-4 h-4 hidden" />,
     plain: <FileText className="w-4 h-4 hidden" />,
   } as const;
 
@@ -118,6 +148,7 @@ const TextBlock = ({
     remember: "Remember",
     simply_put: "Simply Put",
     important: "Important",
+    formula: "Formula",
     plain: " ",
   } as const;
 
