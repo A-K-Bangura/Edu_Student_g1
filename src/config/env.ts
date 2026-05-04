@@ -8,8 +8,31 @@
 const rawApiUrl =
   import.meta.env.VITE_API_URL ?? import.meta.env.VITE_BASE_DEV_URL ?? "";
 
-/** Base URL for axios (may be absolute https, or a path like /api/v1 for same-origin proxy). */
-export const API_URL = String(rawApiUrl).replace(/\/+$/, "");
+const trimTrailingSlashes = (value: string) => value.replace(/\/+$/, "");
+
+/**
+ * Base URL for axios (absolute https, or a path like `/api/v1` for same-origin proxy).
+ *
+ * On Vercel (HTTPS) a baked-in `http://…` API URL causes mixed-content blocking. If the
+ * build still has HTTP (common when `VITE_BASE_DEV_URL` points at the raw IP), force the
+ * same-origin path that `vercel.json` rewrites to the backend.
+ */
+function resolveApiUrl(): string {
+  const url = trimTrailingSlashes(String(rawApiUrl));
+
+  if (
+    import.meta.env.PROD &&
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:" &&
+    url.startsWith("http:")
+  ) {
+    return "/api/v1";
+  }
+
+  return url;
+}
+
+export const API_URL = resolveApiUrl();
 
 export const env = {
   API_URL,
