@@ -1,6 +1,6 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { PageShell } from "../components/layout/PageShell";
 import {
   Clock,
@@ -10,17 +10,82 @@ import {
   PlayCircle,
   ArrowLeft,
   Circle,
+  X,
+  Coins,
 } from "lucide-react";
 import {
   getCourseDetail,
   enrollInCourse,
   getCourseProgress,
+  getEnrollmentStatus,
 } from "../services/courses";
+import { deriveCompletedLessonIds } from "../utils/courseProgress";
+import { requireAuthOrRedirect } from "../utils/guestGuard";
+import { GuestBanner } from "../components/common/GuestBanner";
+import { ApiError } from "../utils/apiError";
+import type { EnrollmentState } from "../types/course";
+import type { AxiosError } from "axios";
+import type { ApiResponse } from "../types";
+
+type PaymentOutcome = "success" | "processing" | "cancelled" | "expired";
 
 export const CourseDetailPage = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read the Monime checkout return outcome (?payment=success|processing|
+  // cancelled|expired) once on mount, then keep it in local state so the
+  // banner survives even after we strip the query string (so a refresh
+  // doesn't re-trigger it). The query param is a display hint only — the
+  // actual source of truth is enrollment_state / enrollment-status below.
+  const [paymentBanner, setPaymentBanner] = useState<PaymentOutcome | null>(
+    null
+  );
+
+  const invalidateCourseQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["course-detail", courseId] });
+    queryClient.invalidateQueries({ queryKey: ["course-progress", courseId] });
+    queryClient.invalidateQueries({ queryKey: ["enrolled-courses"] });
+  };
+
+  useEffect(() => {
+    const outcome = searchParams.get("payment") as PaymentOutcome | null;
+    if (
+      outcome === "success" ||
+      outcome === "processing" ||
+      outcome === "cancelled" ||
+      outcome === "expired"
+    ) {
+      setPaymentBanner(outcome);
+      if (outcome !== "processing") {
+        invalidateCourseQueries();
+        setSearchParams({}, { replace: true });
+      }
+    }
+    // Read only the query param present when this page first mounted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Poll enrollment status while confirming a payment — this also re-checks
+  // with Monime (unlike course-detail's enrollment_state), so a delayed
+  // webhook can't strand the student on "Confirming Payment…" forever.
+  const { data: enrollmentStatus } = useQuery({
+    queryKey: ["enrollment-status", courseId],
+    queryFn: () => getEnrollmentStatus(courseId!),
+    enabled: !!courseId && paymentBanner === "processing",
+    refetchInterval: 3000,
+  });
+
+  useEffect(() => {
+    if (paymentBanner === "processing" && enrollmentStatus?.state === "enrolled") {
+      invalidateCourseQueries();
+      setPaymentBanner("success");
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enrollmentStatus?.state]);
 
   const { data: course, isLoading } = useQuery({
     queryKey: ["course-detail", courseId],
@@ -37,33 +102,63 @@ export const CourseDetailPage = () => {
 
   const enrollMutation = useMutation({
     mutationFn: () => enrollInCourse(courseId!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["course-detail", courseId] });
-      queryClient.invalidateQueries({
-        queryKey: ["course-progress", courseId],
-      });
-      queryClient.invalidateQueries({ queryKey: ["enrolled-courses"] });
+    onSuccess: (result) => {
+      if (result.requires_payment) {
+        // Course-detail's enrollment_state needs refreshing regardless of
+        // whether we're leaving the page (checkout_url) or not (payment
+        // already processing with no fresh checkout to reopen).
+        invalidateCourseQueries();
+        if (result.checkout_url) {
+          window.location.href = result.checkout_url;
+        }
+        return;
+      }
+      invalidateCourseQueries();
       navigate(`/course/${courseId}/play`);
     },
   });
 
   const handleEnroll = () => {
+    if (!requireAuthOrRedirect(navigate)) return;
     enrollMutation.mutate();
   };
 
-  // Extract completed lesson and quiz IDs from progress
-  const completedLessonIds = useMemo(() => {
-    if (!courseProgress?.completed_lessons) return new Set<number>();
+  const enrollmentState: EnrollmentState =
+    course?.enrollment_state ??
+    (course?.is_enrolled || course?.progress ? "enrolled" : "available");
 
-    // completed_lessons is an array of lesson IDs: number[]
-    const lessons = courseProgress.completed_lessons;
-    if (Array.isArray(lessons)) {
-      return new Set(
-        lessons.filter((id): id is number => typeof id === "number")
-      );
-    }
-    return new Set<number>();
-  }, [courseProgress?.completed_lessons]);
+  const enrollButtonLabel = enrollMutation.isPending
+    ? "Enrolling..."
+    : enrollmentState === "payment_pending"
+      ? "Continue Payment"
+      : enrollmentState === "payment_processing"
+        ? "Confirming Payment…"
+        : course?.is_paid && course?.price != null
+          ? `Enroll for ${course.currency || "SLE"} ${course.price.toFixed(2)}`
+          : "Enroll Now";
+
+  const enrollErrorRaw = enrollMutation.error;
+  const enrollError =
+    enrollErrorRaw &&
+    typeof enrollErrorRaw === "object" &&
+    "response" in enrollErrorRaw
+      ? ApiError.fromAxiosError(enrollErrorRaw as AxiosError<ApiResponse>).getUserFriendlyMessage()
+      : (enrollErrorRaw?.message ?? null);
+
+  // Extract completed lesson IDs from progress. GET .../progress no longer
+  // returns the raw `completed_lessons` ID array (curated away) — only the
+  // `lessons_completed` count — so we derive IDs from course order instead.
+  const completedLessonIds = useMemo(() => {
+    return deriveCompletedLessonIds(
+      course?.modules,
+      courseProgress?.completed_lessons,
+      courseProgress?.lessons_completed
+    );
+  }, [
+    course?.modules,
+    courseProgress?.completed_lessons,
+    courseProgress?.lessons_completed,
+  ]);
 
   // Get progress percentage from courseProgress endpoint (primary source)
   const progressPercentage = useMemo(() => {
@@ -102,8 +197,9 @@ export const CourseDetailPage = () => {
       if (module.lessons) {
         lessonsCount += module.lessons.length;
         module.lessons.forEach((lesson) => {
-          quizzesCount += lesson.quizzes_count || 0;
-          totalMinutes += lesson.estimated_minutes || 0;
+          quizzesCount += lesson.quizzes?.length ?? lesson.quizzes_count ?? 0;
+          totalMinutes +=
+            lesson.estimated_duration_minutes ?? lesson.estimated_minutes ?? 0;
         });
       }
     });
@@ -135,6 +231,38 @@ export const CourseDetailPage = () => {
   return (
     <PageShell>
       <div className="max-w-4xl mx-auto px-4 py-8">
+        <GuestBanner />
+
+        {paymentBanner && (
+          <div
+            className={`mb-6 p-4 rounded-lg flex items-start justify-between gap-4 ${
+              paymentBanner === "success"
+                ? "bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300"
+                : paymentBanner === "processing"
+                  ? "bg-azure-50 dark:bg-azure-900/20 text-azure-800 dark:text-azure-300"
+                  : "bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300"
+            }`}
+          >
+            <p className="text-sm font-medium">
+              {paymentBanner === "success" &&
+                "Payment confirmed — you're enrolled!"}
+              {paymentBanner === "processing" &&
+                "Confirming your payment… this can take a moment."}
+              {paymentBanner === "cancelled" &&
+                "Payment was cancelled — you can try enrolling again."}
+              {paymentBanner === "expired" &&
+                "The payment link expired — you can try enrolling again."}
+            </p>
+            <button
+              onClick={() => setPaymentBanner(null)}
+              aria-label="Dismiss"
+              className="shrink-0 opacity-70 hover:opacity-100"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Back Button */}
         <button
           onClick={() => navigate("/courses")}
@@ -195,20 +323,36 @@ export const CourseDetailPage = () => {
             </div>
           </div>
 
+          {!!course.coin_reward && course.coin_reward > 0 && (
+            <p className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-400">
+              <Coins className="w-4 h-4" />
+              Earn {course.coin_reward} Vybe Coins on completion
+            </p>
+          )}
+
           {/* Enroll/Continue Button */}
-          {!course.is_enrolled && !course.progress && (
+          {enrollmentState !== "enrolled" && (
             <button
               onClick={handleEnroll}
-              disabled={enrollMutation.isPending}
+              disabled={
+                enrollMutation.isPending ||
+                enrollmentState === "payment_processing"
+              }
               className="w-full md:w-auto px-8 py-3 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg flex items-center justify-center gap-2"
             >
               <PlayCircle className="w-5 h-5" />
-              {enrollMutation.isPending ? "Enrolling..." : "Enroll Now"}
+              {enrollButtonLabel}
             </button>
           )}
 
+          {enrollError && (
+            <p className="mt-3 text-sm text-red-600 dark:text-red-400">
+              {enrollError}
+            </p>
+          )}
+
           {/* Progress */}
-          {(course.is_enrolled || courseProgress) &&
+          {enrollmentState === "enrolled" &&
             (course.progress || courseProgress) && (
               <div className="bg-gradient-to-br from-azure-50 to-blue-violet-50 dark:from-azure-900/20 dark:to-blue-violet-900/20 p-6 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
@@ -237,7 +381,7 @@ export const CourseDetailPage = () => {
             )}
 
           {/* Continue Learning Button */}
-          {(course.is_enrolled || courseProgress) && (
+          {enrollmentState === "enrolled" && (
             <button
               onClick={() => navigate(`/course/${courseId}/play`)}
               className="w-full md:w-auto px-8 py-3 bg-azure-500 hover:bg-azure-600 text-white rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg flex items-center justify-center gap-2"
@@ -337,13 +481,28 @@ export const CourseDetailPage = () => {
                               {lesson.title}
                             </h4>
                             <div className="flex items-center gap-4 mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              <span>{lesson.estimated_minutes} min</span>
-                              {lesson.quizzes_count > 0 && (
+                              {(lesson.estimated_duration_minutes ??
+                                lesson.estimated_minutes) != null && (
                                 <span>
-                                  {lesson.quizzes_count} quiz
-                                  {lesson.quizzes_count > 1 ? "zes" : ""}
+                                  {lesson.estimated_duration_minutes ??
+                                    lesson.estimated_minutes}{" "}
+                                  min
                                 </span>
                               )}
+                              {(() => {
+                                const quizCount =
+                                  lesson.quizzes?.length ??
+                                  lesson.quizzes_count ??
+                                  0;
+                                return (
+                                  quizCount > 0 && (
+                                    <span>
+                                      {quizCount} quiz
+                                      {quizCount > 1 ? "zes" : ""}
+                                    </span>
+                                  )
+                                );
+                              })()}
                             </div>
                           </div>
                           {isLessonCompleted ? (

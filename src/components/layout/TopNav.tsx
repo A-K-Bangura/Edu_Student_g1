@@ -1,10 +1,31 @@
 import { Link } from "react-router-dom";
 import { Home, BookOpen, Trophy, User, MessageSquare } from "lucide-react";
 import { useUIStore } from "../../store/uiStore";
-import logoMain from "../../assets/logo/univybe_logo_main.png";
+import { isAuthenticated } from "../../services/auth";
+import {
+  brandIconBlack160,
+  brandIconWhite160,
+  brandWordBlack,
+  brandWordWhite,
+} from "../../assets/brand";
+import { GuestHeader } from "./GuestHeader";
 
 export const TopNav = () => {
   const darkMode = useUIStore((state) => state.darkMode);
+  const authenticated = isAuthenticated();
+  const logo = darkMode ? brandIconWhite160 : brandIconBlack160;
+  const wordmark = darkMode ? brandWordWhite : brandWordBlack;
+
+  // Guests get the landing page's header (desktop only; mobile guests keep
+  // BottomNav). It's `fixed`, so reserve its height to keep content below it.
+  if (!authenticated) {
+    return (
+      <>
+        <GuestHeader variant="app" />
+        <div aria-hidden className="hidden h-[65px] md:block" />
+      </>
+    );
+  }
 
   const navItems = [
     { path: "/dashboard", icon: Home, label: "Home" },
@@ -21,15 +42,25 @@ export const TopNav = () => {
           {/* Logo */}
           <Link to="/dashboard" className="flex items-center gap-1">
             <div className="w-20 h-10 rounded-lg flex items-center justify-center">
-              <img src={logoMain} alt="logo" className="w-15 h-15" />
+              <img
+                src={logo.src}
+                width={logo.width}
+                height={logo.height}
+                alt="logo"
+                className="w-15 h-15"
+              />
             </div>
-            <span className="text-[1.8em] font-bold text-gray-900 dark:text-white">
-              UniVybe
-            </span>
+            <img
+              src={wordmark.src}
+              width={wordmark.width}
+              height={wordmark.height}
+              alt="UniVybe"
+              className="h-8 lg:h-12 w-auto"
+            />
           </Link>
 
           {/* Navigation Links - Desktop */}
-          <div className="flex items-center gap-8">
+          <div className="flex-1 flex items-center justify-center gap-8">
             {navItems.map((item) => (
               <Link
                 key={item.path}

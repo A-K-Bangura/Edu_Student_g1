@@ -1,5 +1,5 @@
 import api from "./api";
-import type { ApiResponse } from "../types";
+import type { ApiResponse, PaginatedResponse } from "../types";
 import type {
   AnalyticsDashboard,
   CourseAnalytics,
@@ -7,6 +7,8 @@ import type {
   EngagementAnalytics,
   InsightsData,
   ReportGeneration,
+  ReportDownload,
+  Report,
   ReportList,
 } from "../types/analytics";
 
@@ -92,28 +94,26 @@ export const getEngagementAnalytics =
   };
 
 // Generate performance report
-export const generateReport = async (
-  data: {
-    period: "week" | "month" | "quarter" | "year";
-    include_courses?: boolean;
-    include_engagement?: boolean;
-  }
-): Promise<ReportGeneration> => {
-  const response = await api.post<ApiResponse<{ report: ReportGeneration }>>(
-    "/student/analytics/reports",
-    data
-  );
+export const generateReport = async (data: {
+  report_type: "learning_progress" | "engagement_summary" | "performance_analysis";
+  period_type: "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
+  course_id?: number;
+  include_recommendations?: boolean;
+}): Promise<{ report: ReportGeneration; download_url: string }> => {
+  const response = await api.post<
+    ApiResponse<{ report: ReportGeneration; download_url: string }>
+  >("/student/analytics/reports", data);
 
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || "Failed to generate report");
   }
 
-  return response.data.data.report;
+  return response.data.data;
 };
 
-// Get reports list
+// Get reports list — the raw paginator is returned directly as `data`, no `reports` wrapper
 export const getReports = async (): Promise<ReportList> => {
-  const response = await api.get<ApiResponse<{ reports: ReportList }>>(
+  const response = await api.get<ApiResponse<PaginatedResponse<Report>>>(
     "/student/analytics/reports"
   );
 
@@ -121,20 +121,21 @@ export const getReports = async (): Promise<ReportList> => {
     throw new Error(response.data.message || "Failed to fetch reports");
   }
 
-  return response.data.data.reports;
+  return response.data.data.data || [];
 };
 
-// Download report
+// Download report — despite the name, this returns JSON metadata, not a file stream
 export const downloadReport = async (
   reportUuid: string
-): Promise<Blob> => {
-  const response = await api.get<Blob>(
-    `/student/analytics/reports/${reportUuid}/download`,
-    {
-      responseType: "blob",
-    }
+): Promise<ReportDownload> => {
+  const response = await api.get<ApiResponse<ReportDownload>>(
+    `/student/analytics/reports/${reportUuid}/download`
   );
 
-  return response.data;
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || "Failed to get report download URL");
+  }
+
+  return response.data.data;
 };
 

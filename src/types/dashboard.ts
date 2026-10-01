@@ -1,3 +1,5 @@
+import type { CoinBalance } from "./coins";
+
 // Legacy types for backward compatibility
 export interface LegacyDashboardStats {
   xp_total: number;
@@ -15,9 +17,14 @@ export interface StudentInfo {
   id: string;
   name: string;
   avatar_url?: string;
-  level: number;
+  /** Raw academic level string (e.g. "300", "UnderGrad", "graduate") */
+  level: string;
+  /** XP-tier gamification level, e.g. 3 */
+  score_level: number;
   total_xp: number;
   profile_completion: number;
+  /** Vybe Coins (Round 5) — a second reward currency, separate from XP. */
+  coins?: CoinBalance;
 }
 
 export interface DashboardStats {
@@ -71,6 +78,7 @@ export interface ProgressSummary {
   };
 }
 
+/** A single awarded badge (e.g. from lesson-completion's `new_badge`) */
 export interface Badge {
   id: number;
   name: string;
@@ -79,12 +87,19 @@ export interface Badge {
   earned_at?: string;
 }
 
-export interface Achievement {
-  id: number;
-  name: string;
-  description: string;
-  icon_url?: string;
-  earned_at?: string;
+/** An entry from the badge catalog (earned + unearned), as returned by Get Dashboard/Get Gamification Dashboard/Get Badges */
+export interface BadgeCatalogEntry {
+  badge: {
+    id: number;
+    name: string;
+    description?: string;
+    icon_url: string | null;
+    category?: string;
+    rarity: string;
+  };
+  has_badge: boolean;
+  progress: number;
+  awarded_at: string | null;
 }
 
 export interface LeaderboardPosition {
@@ -118,49 +133,24 @@ export interface DashboardData {
   recent_activity: RecentActivity[];
   enrolled_courses: DashboardEnrolledCourse[];
   progress_summary: ProgressSummary;
-  badges: Badge[];
-  achievements: Achievement[];
-  leaderboard_position: LeaderboardPosition;
+  /** Entire badge catalog (earned + unearned) — filter on `has_badge === true` for earned only. */
+  badges: BadgeCatalogEntry[];
   streak_stats: StreakStats;
   xp_stats: XPStats;
+  // `achievements` and `leaderboard_position` were removed from this response.
+  // Use GET /student/gamification/achievements and GET /student/gamification/position instead.
 }
 
-// Creator/Instructor type
+// Creator/Instructor type — the curated subset the API exposes on `course.creator`
+// (STUDENT_API_PAYLOADS §12/§14). The raw tutor model (email, phone, status, …)
+// is no longer returned.
 export interface Creator {
   id: number;
   uuid: string;
-  email: string;
-  email_verified_at?: string | null;
   firstname: string;
   lastname: string;
-  phone?: string | null;
-  date_of_birth?: string | null;
-  gender?: string | null;
-  role_id: number;
-  university_id?: number | null;
-  faculty_id?: number | null;
-  department_id?: number | null;
-  qualification?: string | null;
-  expertise_area?: string | null;
-  bio?: string | null;
-  credentials_file?: string | null;
-  certifications?: any;
-  years_experience?: number | null;
+  full_name?: string;
   avatar_url?: string | null;
-  preferences?: any;
-  social_links?: any;
-  status: string;
-  verified_at?: string | null;
-  verified_by?: number | null;
-  last_login_at?: string | null;
-  last_login_ip?: string | null;
-  courses_created?: number;
-  students_taught?: number;
-  otp_expires_at?: string | null;
-  otp_attempts?: number;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string | null;
 }
 
 // Module type (simplified for nested course)
@@ -211,6 +201,12 @@ export interface Course {
   total_ratings_count?: number;
   total_xp_available?: number;
   slug?: string;
+  /** Paid-courses (Round 4): admin-approved price. `price` is in major units (150.0 = SLE 150.00), null when free. */
+  is_paid?: boolean;
+  price?: number | null;
+  currency?: string;
+  /** Vybe Coins (Round 5): paid once on first completion of a paid course. 0 for free courses / no reward set. */
+  coin_reward?: number;
   metadata?: {
     difficulty?: string;
     language?: string;
@@ -235,6 +231,10 @@ export interface Course {
     id: number;
     name: string;
   };
+  organization?: {
+    id: number;
+    name: string;
+  } | null;
   meta?: {
     modules_count: number;
     lessons_count: number;
@@ -256,8 +256,9 @@ export interface Course {
 export interface Enrollment {
   id: number;
   uuid: string;
-  student_id: number;
-  course_id: number;
+  // Removed from the curated Enrolled Courses / Course Progress response — use course.id/course.uuid instead.
+  student_id?: number;
+  course_id?: number;
   progress_percent: string | number; // API returns as string, but we'll convert to number
   xp_earned: number;
   lessons_completed: number;
@@ -265,28 +266,15 @@ export interface Enrollment {
   quizzes_passed: number;
   last_lesson_id?: number | null;
   last_module_id?: number | null;
-  streak_count: number;
+  streak_count: number | null;
   last_accessed_date?: string | null;
   last_accessed_at?: string | null;
   completed_at?: string | null;
   completed_lessons?: number[] | null;
   completed_quizzes?: number[] | null;
+  /** Derived from completed_at */
+  is_completed?: boolean;
   created_at: string;
   updated_at: string;
   course: Course; // Nested course object
-}
-
-export interface RecentActivity {
-  type: "lesson_completed" | "badge_earned" | "course_enrolled";
-  title?: string;
-  xp_earned?: number;
-  timestamp: string;
-}
-
-export interface Badge {
-  id: number;
-  name: string;
-  description: string;
-  icon_url: string;
-  earned_at?: string;
 }

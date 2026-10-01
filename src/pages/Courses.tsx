@@ -13,6 +13,7 @@ import {
   getDepartments,
   getOrganizations,
 } from "../services/onboarding";
+import { GuestBanner } from "../components/common/GuestBanner";
 import type { CourseFilters } from "../types/course";
 import type { Course } from "../types/dashboard";
 import type { CourseSearchItem } from "../types/search";
@@ -22,8 +23,9 @@ export const Courses = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   // Get current user to set default filters
   const currentUser = getCurrentUser();
-  const defaultLevel =
-    (currentUser as any)?.year_of_study || (currentUser as any)?.level;
+  // `level` is the raw academic level string; `year_of_study` is only a
+  // backward-compat alias of the same value (see STUDENT_API_PAYLOADS §8).
+  const defaultLevel = currentUser?.level;
   const defaultDepartmentId = currentUser?.department?.id;
   const defaultFacultyId = currentUser?.faculty?.id;
   const defaultUniversityId = currentUser?.university?.id;
@@ -294,6 +296,7 @@ export const Courses = () => {
   return (
     <PageShell>
       <div className="max-w-7xl mx-auto px-4 py-8">
+        <GuestBanner />
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -565,7 +568,7 @@ export const Courses = () => {
         )}
 
         {/* Recommended by Department */}
-        {!isSearchMode && !groupMode && departmentList.length > 0 && (
+        {!isSearchMode && !groupMode && !showAllCourses && departmentList.length > 0 && (
           <div className="mb-10">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -596,7 +599,7 @@ export const Courses = () => {
         )}
 
         {/* Recommended by Faculty */}
-        {!isSearchMode && !groupMode && facultyList.length > 0 && (
+        {!isSearchMode && !groupMode && !showAllCourses && facultyList.length > 0 && (
           <div className="mb-10">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -624,7 +627,7 @@ export const Courses = () => {
         )}
 
         {/* Recommended by University */}
-        {!isSearchMode && !groupMode && universityList.length > 0 && (
+        {!isSearchMode && !groupMode && !showAllCourses && universityList.length > 0 && (
           <div className="mb-10">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -655,7 +658,7 @@ export const Courses = () => {
         )}
 
         {/* Explore All (Unfiltered) */}
-        {!isSearchMode && !groupMode && exploreList.length > 0 && (
+        {!isSearchMode && !groupMode && !showAllCourses && exploreList.length > 0 && (
           <div className="mb-10">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -705,8 +708,12 @@ export const Courses = () => {
           </div>
         )}
 
-        {/* Results */}
-        {isLoadingCourses ? (
+        {/* Results — the flat, full course list. Only shown once the user has
+            moved past the curated preview carousels above (via "Explore All",
+            a "See all" group link, or a search), so the same courses aren't
+            rendered twice on screen at once. */}
+        {(showAllCourses || isSearchMode) &&
+        (isLoadingCourses ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[...Array(6)].map((_, i) => (
               <div
@@ -735,8 +742,8 @@ export const Courses = () => {
 
             {/* Pagination */}
             {!isSearchMode &&
-              coursesData?.meta &&
-              coursesData.meta.last_page > 1 && (
+              coursesData &&
+              coursesData.last_page > 1 && (
                 <div className="flex justify-center gap-2">
                   <button
                     onClick={() =>
@@ -745,28 +752,28 @@ export const Courses = () => {
                         page: Math.max(1, (prev.page || 1) - 1),
                       }))
                     }
-                    disabled={coursesData.meta?.current_page === 1}
+                    disabled={coursesData.current_page === 1}
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
                     Previous
                   </button>
                   <div className="px-4 py-2 bg-azure-500 text-white rounded-lg">
-                    {coursesData.meta?.current_page} /{" "}
-                    {coursesData.meta?.last_page}
+                    {coursesData.current_page} /{" "}
+                    {coursesData.last_page}
                   </div>
                   <button
                     onClick={() =>
                       setFilters((prev) => ({
                         ...prev,
                         page: Math.min(
-                          coursesData.meta?.last_page || 1,
+                          coursesData.last_page || 1,
                           (prev.page || 1) + 1
                         ),
                       }))
                     }
                     disabled={
-                      coursesData.meta?.current_page ===
-                      coursesData.meta?.last_page
+                      coursesData.current_page ===
+                      coursesData.last_page
                     }
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
@@ -824,7 +831,7 @@ export const Courses = () => {
               Try adjusting your search or filters
             </p>
           </div>
-        )}
+        ))}
       </div>
     </PageShell>
   );

@@ -5,7 +5,11 @@ import type {
   CourseDetail,
   CourseFilters,
   CourseProgress,
+  EnrollmentStatus,
+  PaymentInfo,
 } from "../types/course";
+import type { CoinsAwarded } from "../types/coins";
+import { isOnline, isNetworkError, queueOfflineAction } from "../utils/db";
 
 // Get all courses with filters
 export const getCourses = async (
@@ -129,16 +133,53 @@ export const getCourseProgress = async (
   return response.data.data.progress;
 };
 
-// Enroll in a course
+// Enroll in a course. Free courses (and paid courses whose payment already
+// cleared) enroll immediately; paid courses instead return a Monime
+// `checkout_url` to redirect the browser to — see docs/STUDENT_API_PAYLOADS.md
+// §16. Callers must branch on `requires_payment` before assuming `progress`.
+export type EnrollResult =
+  | {
+      requires_payment: true;
+      enrollment_state: string;
+      checkout_url: string | null;
+      payment: PaymentInfo;
+    }
+  | {
+      requires_payment?: false;
+      progress: CourseProgress;
+      xp_awarded: number;
+    };
+
 export const enrollInCourse = async (
   courseId: string | number
-): Promise<{ progress: CourseProgress; xp_awarded: number }> => {
-  const response = await api.post<
-    ApiResponse<{ progress: CourseProgress; xp_awarded: number }>
-  >(`/student/courses/${courseId}/enroll`, {});
+): Promise<EnrollResult> => {
+  const response = await api.post<ApiResponse<EnrollResult>>(
+    `/student/courses/${courseId}/enroll`,
+    {}
+  );
 
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || "Failed to enroll in course");
+  }
+
+  return response.data.data;
+};
+
+// Where a student stands with a course — poll this while showing
+// "Confirming Payment…" after returning from Monime checkout (§16a). Unlike
+// CourseDetail's `enrollment_state`, this also re-checks with Monime, so a
+// delayed/lost webhook can't strand a student on payment_processing forever.
+export const getEnrollmentStatus = async (
+  courseId: string | number
+): Promise<EnrollmentStatus> => {
+  const response = await api.get<ApiResponse<EnrollmentStatus>>(
+    `/student/courses/${courseId}/enrollment-status`
+  );
+
+  if (!response.data.success || !response.data.data) {
+    throw new Error(
+      response.data.message || "Failed to fetch enrollment status"
+    );
   }
 
   return response.data.data;
@@ -158,20 +199,49 @@ export const unenrollFromCourse = async (
   }
 };
 
-// Update course progress
+// Update course progress (marks a lesson or quiz complete).
+// This is the single endpoint both quiz submission and lesson completion go
+// through in the UI (Quiz.tsx / CoursePlayer.tsx) — see docs/DECISIONS.md.
+// Offline-aware: if the request can't reach the server, the action is queued
+// locally (via services/sync.ts, drained on reconnect) and this throws
+// OfflineQueuedError instead of the real result — callers should catch that
+// specifically to show a "saved, will sync later" state.
 export const updateCourseProgress = async (
   courseId: string | number,
   data: { lesson_id?: number; quiz_id?: number; completed: boolean }
-): Promise<{ progress: CourseProgress; course_completed: boolean }> => {
-  const response = await api.post<
-    ApiResponse<{ progress: CourseProgress; course_completed: boolean }>
-  >(`/student/courses/${courseId}/progress`, data);
+): Promise<{
+  progress: CourseProgress;
+  course_completed: boolean;
+  /** Only present when this request completes a paid course with a coin reward — see docs/STUDENT_API_PAYLOADS.md §17. */
+  coins_awarded?: CoinsAwarded;
+}> => {
+  const url = `/student/courses/${courseId}/progress`;
+  const actionType = data.lesson_id !== undefined ? "lesson_complete" : "quiz_complete";
 
-  if (!response.data.success || !response.data.data) {
-    throw new Error(response.data.message || "Failed to update progress");
+  if (!isOnline()) {
+    return queueOfflineAction({ type: actionType, method: "POST", url, payload: data });
   }
 
-  return response.data.data;
+  try {
+    const response = await api.post<
+      ApiResponse<{
+        progress: CourseProgress;
+        course_completed: boolean;
+        coins_awarded?: CoinsAwarded;
+      }>
+    >(url, data);
+
+    if (!response.data.success || !response.data.data) {
+      throw new Error(response.data.message || "Failed to update progress");
+    }
+
+    return response.data.data;
+  } catch (error) {
+    if (isNetworkError(error)) {
+      return queueOfflineAction({ type: actionType, method: "POST", url, payload: data });
+    }
+    throw error;
+  }
 };
 
 // Get course modules

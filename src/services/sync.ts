@@ -1,12 +1,18 @@
 import api from "./api";
+import type { OfflineAction } from "../utils/db";
 import {
   getOfflineActions,
   removeOfflineAction,
+  bumpOfflineActionRetryCount,
   isOnline,
   onOnlineStatusChange,
 } from "../utils/db";
 
-export const syncOfflineActions = async (): Promise<void> => {
+const MAX_RETRIES = 3;
+
+export const syncOfflineActions = async (
+  onActionSynced?: (action: OfflineAction) => void
+): Promise<void> => {
   if (!isOnline()) {
     console.log("Offline - skipping sync");
     return;
@@ -35,10 +41,16 @@ export const syncOfflineActions = async (): Promise<void> => {
       // Success - remove from queue
       await removeOfflineAction(action.id as string);
       console.log("Synced action:", action.type);
+      onActionSynced?.(action);
     } catch (error) {
       console.error("Failed to sync action:", action.type, error);
-      // Increment retry count and potentially remove after too many retries
-      if (action.retryCount >= 3) {
+      // Track retries and drop the action once it's failed too many times
+      // (e.g. a validation error that will never succeed as-is) rather than
+      // retrying it forever on every future reconnect.
+      const retryCount = await bumpOfflineActionRetryCount(
+        action.id as string
+      );
+      if (retryCount >= MAX_RETRIES) {
         await removeOfflineAction(action.id as string);
         console.log("Removed action after max retries:", action.type);
       }
@@ -46,17 +58,19 @@ export const syncOfflineActions = async (): Promise<void> => {
   }
 };
 
-export const initSync = (): (() => void) => {
+export const initSync = (
+  onActionSynced?: (action: OfflineAction) => void
+): (() => void) => {
   // Initial sync if online
   if (isOnline()) {
-    syncOfflineActions();
+    syncOfflineActions(onActionSynced);
   }
 
   // Sync when coming back online
   return onOnlineStatusChange((online) => {
     if (online) {
       console.log("Back online - syncing actions");
-      syncOfflineActions();
+      syncOfflineActions(onActionSynced);
     }
   });
 };

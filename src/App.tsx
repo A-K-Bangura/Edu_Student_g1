@@ -40,9 +40,6 @@ const CourseDetailPage = lazy(() =>
 const CoursePlayer = lazy(() =>
   import("./pages/CoursePlayer").then((m) => ({ default: m.CoursePlayer }))
 );
-const QuizPage = lazy(() =>
-  import("./pages/Quiz").then((m) => ({ default: m.QuizPage }))
-);
 const Feed = lazy(() =>
   import("./pages/Feed").then((m) => ({ default: m.Feed }))
 );
@@ -50,6 +47,12 @@ const EnrolledCourses = lazy(() =>
   import("./pages/EnrolledCourses").then((m) => ({
     default: m.EnrolledCourses,
   }))
+);
+const Landing = lazy(() =>
+  import("./pages/Landing").then((m) => ({ default: m.Landing }))
+);
+const Wallet = lazy(() =>
+  import("./pages/Wallet").then((m) => ({ default: m.Wallet }))
 );
 
 // Loading fallback component
@@ -112,39 +115,33 @@ function App() {
               <Route
                 path="/dashboard"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireOnboarding>
                     <Dashboard />
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/courses"
-                element={
-                  <ProtectedRoute>
-                    <Courses />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Public: guests can browse courses without an account */}
+              <Route path="/courses" element={<Courses />} />
               <Route
                 path="/courses/enrolled"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireOnboarding>
                     <EnrolledCourses />
                   </ProtectedRoute>
                 }
               />
+              {/* Public: guests can preview a course's full curriculum */}
+              <Route path="/course/:courseId" element={<CourseDetailPage />} />
+              {/* Alias for Monime's checkout-return redirect, which the
+                  backend sends to {STUDENT_PORTAL_URL}/courses/{slug} (plural) */}
               <Route
-                path="/course/:courseId"
-                element={
-                  <ProtectedRoute>
-                    <CourseDetailPage />
-                  </ProtectedRoute>
-                }
+                path="/courses/:courseId"
+                element={<CourseDetailPage />}
               />
               <Route
                 path="/course/:courseId/play"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireOnboarding>
                     <CoursePlayer />
                   </ProtectedRoute>
                 }
@@ -152,31 +149,17 @@ function App() {
               <Route
                 path="/course/:courseId/module/:moduleId/lesson/:lessonId"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireOnboarding>
                     <CoursePlayer />
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/lesson/:lessonId/quiz"
-                element={
-                  <ProtectedRoute>
-                    <QuizPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/feed"
-                element={
-                  <ProtectedRoute>
-                    <Feed />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Public: guests can read the feed without an account */}
+              <Route path="/feed" element={<Feed />} />
               <Route
                 path="/leaderboard"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireOnboarding>
                     <Leaderboard />
                   </ProtectedRoute>
                 }
@@ -184,20 +167,28 @@ function App() {
               <Route
                 path="/profile"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireOnboarding>
                     <Profile />
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/wallet"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <Wallet />
+                  </ProtectedRoute>
+                }
+              />
 
-              {/* Default redirect - check authentication first */}
+              {/* Root: dashboard for signed-in users, landing page for guests */}
               <Route
                 path="/"
                 element={
                   isAuthenticated() ? (
                     <Navigate to="/dashboard" replace />
                   ) : (
-                    <Navigate to="/auth/login" replace />
+                    <Landing />
                   )
                 }
               />
@@ -207,7 +198,7 @@ function App() {
                   isAuthenticated() ? (
                     <Navigate to="/dashboard" replace />
                   ) : (
-                    <Navigate to="/auth/login" replace />
+                    <Navigate to="/" replace />
                   )
                 }
               />

@@ -1,12 +1,15 @@
-import api from "./api";
-import type { ApiResponse } from "../types";
+import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Note, NoteCreate, NoteUpdate } from "../types/notes";
-import { openDB } from "idb";
+import { getCurrentUser } from "./auth";
+
+// Notes are a frontend-only feature — the backend has no notes endpoint
+// (confirmed with the project owner). Everything here is local to the
+// device via IndexedDB; nothing is ever sent to the API.
 
 const DB_NAME = "edulift-notes-db";
 const DB_VERSION = 1;
 
-interface NotesDB {
+interface NotesDB extends DBSchema {
   notes: {
     key: number;
     value: Note;
@@ -14,122 +17,69 @@ interface NotesDB {
   };
 }
 
-// Initialize IndexedDB
-export const initNotesDB = async () => {
-  const db = await openDB<NotesDB>(DB_NAME, DB_VERSION, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains("notes")) {
-        const notesStore = db.createObjectStore("notes", { keyPath: "id" });
-        notesStore.createIndex("lesson_id", "lesson_id");
-      }
-    },
-  });
-  return db;
+let dbPromise: Promise<IDBPDatabase<NotesDB>> | null = null;
+
+const getDB = (): Promise<IDBPDatabase<NotesDB>> => {
+  if (!dbPromise) {
+    dbPromise = openDB<NotesDB>(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains("notes")) {
+          const notesStore = db.createObjectStore("notes", { keyPath: "id" });
+          notesStore.createIndex("lesson_id", "lesson_id");
+        }
+      },
+    });
+  }
+  return dbPromise;
 };
 
-// Get note from server or cache
+const currentUserId = (): number => {
+  const user = getCurrentUser();
+  const id = user?.id;
+  return typeof id === "number" ? id : 0;
+};
+
+// Get the note for a lesson (there is at most one per lesson)
 export const getNote = async (lessonId: number): Promise<Note | null> => {
-  try {
-    const response = await api.get<ApiResponse<Note[]>>(
-      `/notes?lessonId=${lessonId}`
-    );
-    const notes = response.data.data;
-    return notes && notes.length > 0 ? notes[0] : null;
-  } catch (error) {
-    console.error("Failed to fetch note from server:", error);
-    // Fallback to IndexedDB
-    const db = await initNotesDB();
-    const cachedNote = await db.get("notes", lessonId);
-    return cachedNote || null;
-  }
+  const db = await getDB();
+  const notes = await db.getAllFromIndex("notes", "lesson_id", lessonId);
+  return notes[0] ?? null;
 };
 
-// Save note to server and cache
+// Create a new note for a lesson
 export const saveNote = async (noteData: NoteCreate): Promise<Note> => {
-  const db = await initNotesDB();
-
-  try {
-    // Try to save to server first
-    const response = await api.post<ApiResponse<Note>>("/notes", noteData);
-    const note = response.data.data!;
-
-    // Cache in IndexedDB
-    await db.put("notes", note);
-
-    return note;
-  } catch (error) {
-    console.error("Failed to save note to server:", error);
-
-    // Save to IndexedDB for offline persistence
-    const cachedNote = {
-      id: Date.now(), // Temporary ID
-      user_id: 1, // Get from localStorage or context
-      lesson_id: noteData.lesson_id,
-      content: noteData.content,
-      updated_at: new Date().toISOString(),
-    } as Note;
-
-    await db.put("notes", cachedNote);
-
-    // Queue for sync when online
-    await queueNoteForSync(cachedNote);
-
-    return cachedNote;
-  }
+  const db = await getDB();
+  const note: Note = {
+    id: Date.now(),
+    user_id: currentUserId(),
+    lesson_id: noteData.lesson_id,
+    content: noteData.content,
+    updated_at: new Date().toISOString(),
+  };
+  await db.put("notes", note);
+  return note;
 };
 
-// Update existing note
+// Update an existing note
 export const updateNote = async (noteData: NoteUpdate): Promise<Note> => {
-  const db = await initNotesDB();
+  const db = await getDB();
+  const existing = await db.get("notes", noteData.id);
 
-  try {
-    const response = await api.patch<ApiResponse<Note>>(
-      `/notes/${noteData.id}`,
-      {
-        content: noteData.content,
-      }
-    );
-    const note = response.data.data!;
-
-    // Update cache
-    await db.put("notes", note);
-
-    return note;
-  } catch (error) {
-    console.error("Failed to update note on server:", error);
-
-    // Update in IndexedDB
-    const existingNote = await db.get("notes", noteData.id);
-    if (existingNote) {
-      const updatedNote = {
-        ...existingNote,
-        content: noteData.content,
-        updated_at: new Date().toISOString(),
-      };
-      await db.put("notes", updatedNote);
-
-      // Queue for sync
-      await queueNoteForSync(updatedNote);
-
-      return updatedNote;
-    }
-
-    throw error;
-  }
+  const note: Note = {
+    id: noteData.id,
+    user_id: existing?.user_id ?? currentUserId(),
+    lesson_id: existing?.lesson_id ?? 0,
+    content: noteData.content,
+    updated_at: new Date().toISOString(),
+  };
+  await db.put("notes", note);
+  return note;
 };
 
-// Queue note for sync when online
-const queueNoteForSync = async (note: Note) => {
-  try {
-    const db = await initNotesDB();
-    const syncQueue = db
-      .transaction("syncQueue", "readwrite")
-      .objectStore("syncQueue");
-    await syncQueue.add({ note, timestamp: Date.now(), synced: false });
-  } catch {
-    // Sync queue table might not exist yet
-    console.warn("Sync queue not initialized");
-  }
+// Delete a note
+export const deleteNote = async (id: number): Promise<void> => {
+  const db = await getDB();
+  await db.delete("notes", id);
 };
 
 // Download note as text

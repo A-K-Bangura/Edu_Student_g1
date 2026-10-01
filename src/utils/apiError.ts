@@ -89,6 +89,47 @@ export class ApiError extends Error {
       case "VALIDATION_ERROR":
         return this.message || "Please check your input and try again.";
 
+      case "PAYMENT_UNAVAILABLE":
+        return "Payment is temporarily unavailable. Please try again shortly.";
+
+      case "PRICING_UNAVAILABLE":
+        return "This course's pricing needs to be fixed by an admin — please try again later.";
+
+      case "ENROLLMENT_IN_PROGRESS":
+        return "Your enrollment is already being processed — please wait a moment.";
+
+      case "ALREADY_ENROLLED":
+        return "You're already enrolled in this course.";
+
+      case "BELOW_MINIMUM_EXCHANGE": {
+        const min = this.details?.min_exchange_coins;
+        return min
+          ? `You need at least ${min} Coins to request an exchange.`
+          : "That's below the minimum amount you can exchange.";
+      }
+
+      case "INSUFFICIENT_COINS": {
+        const available = this.details?.available_coins;
+        return available !== undefined
+          ? `You only have ${available} Coins available to exchange.`
+          : "You don't have enough Coins available for that.";
+      }
+
+      case "EXCHANGE_VALUE_TOO_SMALL":
+        return "That amount is worth less than the smallest payout unit at the current rate — try a larger amount.";
+
+      case "EXCHANGE_UNAVAILABLE":
+        return "Exchanging Coins isn't available yet — check back soon.";
+
+      case "ACCOUNT_NOT_ACTIVE":
+        return "Your account isn't active, so this action isn't available. Please contact support.";
+
+      case "DUPLICATE_EXCHANGE_REQUEST":
+        return "You already have a matching exchange request open — please wait for it to process.";
+
+      case "IDEMPOTENCY_KEY_REUSED":
+        return "This request doesn't match a previous attempt — please refresh and try again.";
+
       default:
         return this.message || "An error occurred. Please try again.";
     }

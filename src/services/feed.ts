@@ -1,3 +1,4 @@
+import { isAxiosError } from "axios";
 import api from "./api";
 import type { ApiResponse, PaginatedResponse } from "../types";
 import type {
@@ -12,6 +13,22 @@ import type {
   FeedTimeResponse,
   FeedExchangeResponse,
 } from "../types/feed";
+
+/**
+ * True when a feed request was rejected because the student's feed-time
+ * balance is exhausted. The API answers 403 with `error.code === "FEED_LOCKED"`
+ * (STUDENT_API_PAYLOADS §41); the top-level `error_code` is checked as a
+ * fallback for older envelopes.
+ */
+export const isFeedLockedError = (error: unknown): boolean => {
+  if (!isAxiosError<ApiResponse>(error)) return false;
+  const { status, data } = error.response ?? {};
+  return (
+    status === 403 ||
+    data?.error?.code === "FEED_LOCKED" ||
+    data?.error_code === "FEED_LOCKED"
+  );
+};
 
 // Get feed posts
 export const getFeedPosts = async (

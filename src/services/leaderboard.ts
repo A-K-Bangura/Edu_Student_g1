@@ -5,49 +5,39 @@ import type {
   UniversityLeaderboard,
   FacultyLeaderboard,
   DepartmentLeaderboard,
-  AchievementLeaderboard,
+  OrganizationLeaderboard,
+  ScopedLeaderboardApiEntry,
 } from "../types/leaderboard";
+
+interface ScopedLeaderboardResponse {
+  leaderboard: ScopedLeaderboardApiEntry[];
+  stats?: {
+    total_students: number;
+    total_xp: string;
+    average_xp: number;
+    top_student: {
+      name: string;
+      xp: number;
+    };
+  };
+  period?: string;
+}
 
 // Get overall leaderboard
 export const getLeaderboard = async (
-  limit: number = 50,
-  offset?: number
+  limit: number = 50
 ): Promise<LeaderboardData> => {
   const params = new URLSearchParams();
   if (limit) params.append("limit", limit.toString());
-  if (offset) params.append("offset", offset.toString());
 
-  const response = await api.get<
-    ApiResponse<{
-      leaderboard: Array<{
-        rank: number;
-        student: {
-          id: number;
-          name: string;
-          avatar_url?: string;
-          university?: string;
-        };
-        xp_total: number;
-        period: string;
-      }>;
-      stats?: {
-        total_students: number;
-        total_xp: string;
-        average_xp: number;
-        top_student: {
-          name: string;
-          xp: number;
-        };
-      };
-      period?: string;
-    }>
-  >(`/student/leaderboard?${params.toString()}`);
+  const response = await api.get<ApiResponse<ScopedLeaderboardResponse>>(
+    `/student/leaderboard?${params.toString()}`
+  );
 
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || "Failed to fetch leaderboard");
   }
 
-  // Transform API response to match component expectations
   const transformedEntries = response.data.data.leaderboard.map((entry) => ({
     rank: entry.rank,
     student_id: entry.student.id,
@@ -71,39 +61,15 @@ export const getLeaderboard = async (
 // Get university leaderboard
 export const getUniversityLeaderboard = async (
   universityId: number,
-  limit: number = 50,
-  offset?: number
+  limit: number = 50
 ): Promise<UniversityLeaderboard> => {
   const params = new URLSearchParams();
   params.append("university_id", universityId.toString());
   if (limit) params.append("limit", limit.toString());
-  if (offset) params.append("offset", offset.toString());
 
-  const response = await api.get<
-    ApiResponse<{
-      leaderboard: Array<{
-        rank: number;
-        student: {
-          id: number;
-          name: string;
-          avatar_url?: string;
-          faculty?: string;
-        };
-        xp_total: number;
-        period: string;
-      }>;
-      stats?: {
-        total_students: number;
-        total_xp: string;
-        average_xp: number;
-        top_student: {
-          name: string;
-          xp: number;
-        };
-      };
-      period?: string;
-    }>
-  >(`/student/leaderboard/university?${params.toString()}`);
+  const response = await api.get<ApiResponse<ScopedLeaderboardResponse>>(
+    `/student/leaderboard/university?${params.toString()}`
+  );
 
   if (!response.data.success || !response.data.data) {
     throw new Error(
@@ -111,8 +77,6 @@ export const getUniversityLeaderboard = async (
     );
   }
 
-  // Transform API response to match component expectations
-  // University leaderboard returns student.faculty
   const transformedEntries = response.data.data.leaderboard.map((entry) => ({
     rank: entry.rank,
     student_id: entry.student.id,
@@ -140,39 +104,15 @@ export const getUniversityLeaderboard = async (
 // Get faculty leaderboard
 export const getFacultyLeaderboard = async (
   facultyId: number,
-  limit: number = 50,
-  offset?: number
+  limit: number = 50
 ): Promise<FacultyLeaderboard> => {
   const params = new URLSearchParams();
   params.append("faculty_id", facultyId.toString());
   if (limit) params.append("limit", limit.toString());
-  if (offset) params.append("offset", offset.toString());
 
-  const response = await api.get<
-    ApiResponse<{
-      leaderboard: Array<{
-        rank: number;
-        student: {
-          id: number;
-          name: string;
-          avatar_url?: string;
-          department?: string;
-        };
-        xp_total: number;
-        period: string;
-      }>;
-      stats?: {
-        total_students: number;
-        total_xp: string;
-        average_xp: number;
-        top_student: {
-          name: string;
-          xp: number;
-        };
-      };
-      period?: string;
-    }>
-  >(`/student/leaderboard/faculty?${params.toString()}`);
+  const response = await api.get<ApiResponse<ScopedLeaderboardResponse>>(
+    `/student/leaderboard/faculty?${params.toString()}`
+  );
 
   if (!response.data.success || !response.data.data) {
     throw new Error(
@@ -180,8 +120,6 @@ export const getFacultyLeaderboard = async (
     );
   }
 
-  // Transform API response to match component expectations
-  // Faculty leaderboard returns student.department
   const transformedEntries = response.data.data.leaderboard.map((entry) => ({
     rank: entry.rank,
     student_id: entry.student.id,
@@ -209,38 +147,15 @@ export const getFacultyLeaderboard = async (
 // Get department leaderboard
 export const getDepartmentLeaderboard = async (
   departmentId: number,
-  limit: number = 50,
-  offset?: number
+  limit: number = 50
 ): Promise<DepartmentLeaderboard> => {
   const params = new URLSearchParams();
   params.append("department_id", departmentId.toString());
   if (limit) params.append("limit", limit.toString());
-  if (offset) params.append("offset", offset.toString());
 
-  const response = await api.get<
-    ApiResponse<{
-      leaderboard: Array<{
-        rank: number;
-        student: {
-          id: number;
-          name: string;
-          avatar_url?: string;
-        };
-        xp_total: number;
-        period: string;
-      }>;
-      stats?: {
-        total_students: number;
-        total_xp: string;
-        average_xp: number;
-        top_student: {
-          name: string;
-          xp: number;
-        };
-      };
-      period?: string;
-    }>
-  >(`/student/leaderboard/department?${params.toString()}`);
+  const response = await api.get<ApiResponse<ScopedLeaderboardResponse>>(
+    `/student/leaderboard/department?${params.toString()}`
+  );
 
   if (!response.data.success || !response.data.data) {
     throw new Error(
@@ -248,8 +163,6 @@ export const getDepartmentLeaderboard = async (
     );
   }
 
-  // Transform API response to match component expectations
-  // Department leaderboard doesn't return any sub-organization field
   const transformedEntries = response.data.data.leaderboard.map((entry) => ({
     rank: entry.rank,
     student_id: entry.student.id,
@@ -273,48 +186,26 @@ export const getDepartmentLeaderboard = async (
   };
 };
 
-// Get achievement leaderboard
-export const getAchievementLeaderboard = async (
-  limit: number = 50,
-  offset?: number
-): Promise<AchievementLeaderboard> => {
+// Get organization leaderboard — mirrors university/faculty/department, for
+// UnderGrad/graduate students who are affiliated via organization_id instead
+export const getOrganizationLeaderboard = async (
+  organizationId: number,
+  limit: number = 50
+): Promise<OrganizationLeaderboard> => {
   const params = new URLSearchParams();
+  params.append("organization_id", organizationId.toString());
   if (limit) params.append("limit", limit.toString());
-  if (offset) params.append("offset", offset.toString());
 
-  const response = await api.get<
-    ApiResponse<{
-      leaderboard: Array<{
-        rank: number;
-        student: {
-          id: number;
-          name: string;
-          avatar_url?: string;
-          university?: string;
-        };
-        xp_total: number;
-        period: string;
-      }>;
-      stats?: {
-        total_students: number;
-        total_xp: string;
-        average_xp: number;
-        top_student: {
-          name: string;
-          xp: number;
-        };
-      };
-      period?: string;
-    }>
-  >(`/student/leaderboard/achievements?${params.toString()}`);
+  const response = await api.get<ApiResponse<ScopedLeaderboardResponse>>(
+    `/student/leaderboard/organization?${params.toString()}`
+  );
 
   if (!response.data.success || !response.data.data) {
     throw new Error(
-      response.data.message || "Failed to fetch achievement leaderboard"
+      response.data.message || "Failed to fetch organization leaderboard"
     );
   }
 
-  // Transform API response to match component expectations
   const transformedEntries = response.data.data.leaderboard.map((entry) => ({
     rank: entry.rank,
     student_id: entry.student.id,
@@ -323,7 +214,6 @@ export const getAchievementLeaderboard = async (
     xp_total: entry.xp_total,
     badges_count: 0,
     streak_days: 0,
-    university: entry.student.university,
   }));
 
   return {
@@ -332,5 +222,13 @@ export const getAchievementLeaderboard = async (
       response.data.data.stats?.total_students || transformedEntries.length,
     stats: response.data.data.stats,
     period: response.data.data.period,
+    organization: {
+      id: organizationId,
+      name: "",
+    },
   };
 };
+
+// NOTE: GET /student/leaderboard/achievements was removed by the backend
+// (now a plain 404). Use `getAchievements` from services/gamification.ts
+// instead — it returns the student's own earned badges, not a leaderboard.

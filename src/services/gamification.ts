@@ -4,8 +4,8 @@ import type {
   GamificationDashboard,
   BadgeList,
   StreakData,
-  LeaderboardPositions,
-  LeaderboardPositionDetail,
+  GamificationLeaderboard,
+  LeaderboardPosition,
   XPHistory,
   AchievementList,
   CheckBadgesResponse,
@@ -28,7 +28,7 @@ export const getGamificationDashboard =
     return response.data.data;
   };
 
-// Get badges
+// Get badges (entire catalog: earned + unearned)
 export const getBadges = async (): Promise<BadgeList> => {
   const response = await api.get<ApiResponse<{ badges: BadgeList }>>(
     "/student/gamification/badges"
@@ -43,7 +43,7 @@ export const getBadges = async (): Promise<BadgeList> => {
 
 // Get streaks
 export const getStreaks = async (): Promise<StreakData> => {
-  const response = await api.get<ApiResponse<{ streaks: StreakData }>>(
+  const response = await api.get<ApiResponse<StreakData>>(
     "/student/gamification/streaks"
   );
 
@@ -51,36 +51,44 @@ export const getStreaks = async (): Promise<StreakData> => {
     throw new Error(response.data.message || "Failed to fetch streaks");
   }
 
-  return response.data.data.streaks;
+  return response.data.data;
 };
 
 // Get leaderboards
 export const getGamificationLeaderboards = async (
-  scope?: "overall" | "university" | "faculty" | "department",
-  limit?: number
-): Promise<LeaderboardPositions> => {
+  type: "global" | "university" | "course" = "global",
+  options?: { university_id?: number; period?: "all" | "week" | "month" | "year"; limit?: number }
+): Promise<GamificationLeaderboard> => {
   const params = new URLSearchParams();
-  if (scope) params.append("scope", scope);
-  if (limit) params.append("limit", limit.toString());
+  params.append("type", type);
+  if (options?.university_id)
+    params.append("university_id", options.university_id.toString());
+  if (options?.period) params.append("period", options.period);
+  if (options?.limit) params.append("limit", options.limit.toString());
 
-  const response = await api.get<
-    ApiResponse<{ leaderboards: LeaderboardPositions }>
-  >(`/student/gamification/leaderboards?${params.toString()}`);
+  const response = await api.get<ApiResponse<GamificationLeaderboard>>(
+    `/student/gamification/leaderboards?${params.toString()}`
+  );
 
   if (!response.data.success || !response.data.data) {
-    throw new Error(
-      response.data.message || "Failed to fetch leaderboards"
-    );
+    throw new Error(response.data.message || "Failed to fetch leaderboards");
   }
 
-  return response.data.data.leaderboards;
+  return response.data.data;
 };
 
 // Get leaderboard position
-export const getLeaderboardPosition = async (): Promise<LeaderboardPositionDetail> => {
-  const response = await api.get<
-    ApiResponse<{ position: LeaderboardPositionDetail }>
-  >("/student/gamification/position");
+export const getLeaderboardPosition = async (
+  type: "global" | "university" | "faculty" | "department" | "organization" = "global",
+  scopeId?: number
+): Promise<LeaderboardPosition> => {
+  const params = new URLSearchParams();
+  params.append("type", type);
+  if (scopeId !== undefined) params.append("scope_id", scopeId.toString());
+
+  const response = await api.get<ApiResponse<{ position: LeaderboardPosition }>>(
+    `/student/gamification/position?${params.toString()}`
+  );
 
   if (!response.data.success || !response.data.data) {
     throw new Error(
@@ -92,17 +100,11 @@ export const getLeaderboardPosition = async (): Promise<LeaderboardPositionDetai
 };
 
 // Get XP history
-export const getXPHistory = async (
-  limit?: number,
-  offset?: number,
-  type?: "awarded" | "deducted"
-): Promise<XPHistory> => {
+export const getXPHistory = async (limit?: number): Promise<XPHistory["xp_history"]> => {
   const params = new URLSearchParams();
   if (limit) params.append("limit", limit.toString());
-  if (offset) params.append("offset", offset.toString());
-  if (type) params.append("type", type);
 
-  const response = await api.get<ApiResponse<{ history: XPHistory }>>(
+  const response = await api.get<ApiResponse<XPHistory>>(
     `/student/gamification/xp-history?${params.toString()}`
   );
 
@@ -110,10 +112,10 @@ export const getXPHistory = async (
     throw new Error(response.data.message || "Failed to fetch XP history");
   }
 
-  return response.data.data.history;
+  return response.data.data.xp_history;
 };
 
-// Get achievements
+// Get achievements (the student's own recently-earned badges)
 export const getAchievements = async (
   limit?: number
 ): Promise<AchievementList> => {
@@ -135,7 +137,7 @@ export const getAchievements = async (
 
 // Check badges
 export const checkBadges = async (): Promise<CheckBadgesResponse> => {
-  const response = await api.post<ApiResponse<{ badges: CheckBadgesResponse }>>(
+  const response = await api.post<ApiResponse<CheckBadgesResponse>>(
     "/student/gamification/check-badges",
     {}
   );
@@ -144,14 +146,14 @@ export const checkBadges = async (): Promise<CheckBadgesResponse> => {
     throw new Error(response.data.message || "Failed to check badges");
   }
 
-  return response.data.data.badges;
+  return response.data.data;
 };
 
 // Get gamification stats
 export const getGamificationStats = async (): Promise<GamificationStats> => {
-  const response = await api.get<
-    ApiResponse<{ stats: GamificationStats }>
-  >("/student/gamification/stats");
+  const response = await api.get<ApiResponse<GamificationStats>>(
+    "/student/gamification/stats"
+  );
 
   if (!response.data.success || !response.data.data) {
     throw new Error(
@@ -159,6 +161,5 @@ export const getGamificationStats = async (): Promise<GamificationStats> => {
     );
   }
 
-  return response.data.data.stats;
+  return response.data.data;
 };
-

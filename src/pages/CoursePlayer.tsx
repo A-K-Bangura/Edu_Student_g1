@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageShell } from "../components/layout/PageShell";
 import { OutlineSidebar } from "../components/course/OutlineSidebar";
 import { MiniLessonRenderer } from "../components/course/MiniLessonRenderer";
@@ -15,6 +15,8 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  WifiOff,
+  Coins,
 } from "lucide-react";
 import { getLessonDetail, SequentialAccessError } from "../services/lessons";
 import {
@@ -25,12 +27,18 @@ import {
 import { getUserProfile } from "../services/profile";
 import { useUIStore } from "../store/uiStore";
 import { debugLog } from "../utils/debug";
+import { OfflineQueuedError } from "../utils/db";
+import {
+  deriveCompletedLessonIds,
+  deriveCompletedQuizIds,
+} from "../utils/courseProgress";
 import { QuizRenderer } from "../components/course/QuizRenderer";
 import type { QuizAttemptMeta } from "../components/course/QuizRenderer";
 import type { MiniLesson, LessonDetail } from "../types/lesson";
 import type { CourseProgress } from "../types/course";
 import type { Quiz, QuizSubmission, QuizResult } from "../types/quiz";
 import type { UserProfile } from "../types/profile";
+import type { CoinsAwarded } from "../types/coins";
 import {
   DEFAULT_INSPO_TYPE,
   getRandomInspirationMessage,
@@ -48,6 +56,7 @@ export const CoursePlayer = () => {
   }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [currentScreenIndex, setCurrentScreenIndex] = useState(0);
@@ -59,13 +68,13 @@ export const CoursePlayer = () => {
         result?: QuizResult;
         error?: string;
         attempt?: QuizAttemptMeta;
-        progressStatus: "idle" | "updating" | "success" | "error";
+        progressStatus: "idle" | "updating" | "success" | "queued" | "error";
         progressError?: string;
       }
     >
   >({});
   const [lessonCompletionStatus, setLessonCompletionStatus] = useState<
-    "idle" | "submitting" | "success" | "error"
+    "idle" | "submitting" | "success" | "queued" | "error"
   >("idle");
   const [lessonCompletionError, setLessonCompletionError] = useState<
     string | null
@@ -74,6 +83,7 @@ export const CoursePlayer = () => {
   const [lessonCompletion, setLessonCompletion] = useState<{
     progress: CourseProgress;
     courseCompleted: boolean;
+    coinsAwarded?: CoinsAwarded;
   } | null>(null);
   const [inspirationMessage, setInspirationMessage] = useState("");
 
@@ -191,40 +201,33 @@ export const CoursePlayer = () => {
     ? detailModules
     : courseProgress?.course?.modules || detailModules;
 
-  // Extract completed lesson and quiz IDs from progress
+  // Extract completed lesson and quiz IDs from progress. GET .../progress
+  // no longer returns the raw completed_lessons/completed_quizzes ID
+  // arrays (curated away) — only lessons_completed/quizzes_completed
+  // counts — so we derive IDs from course order as a fallback.
   const completedLessonIds = useMemo(() => {
-    if (!courseProgress?.completed_lessons) return new Set<number>();
-
-    // completed_lessons is an array of lesson IDs: number[]
-    const lessons = courseProgress.completed_lessons;
-    if (Array.isArray(lessons)) {
-      // Filter out any non-number values and create Set
-      return new Set(
-        lessons.filter((id): id is number => typeof id === "number")
-      );
-    }
-    return new Set<number>();
-  }, [courseProgress?.completed_lessons]);
+    return deriveCompletedLessonIds(
+      modulesSource,
+      courseProgress?.completed_lessons,
+      courseProgress?.lessons_completed
+    );
+  }, [
+    modulesSource,
+    courseProgress?.completed_lessons,
+    courseProgress?.lessons_completed,
+  ]);
 
   const completedQuizIds = useMemo(() => {
-    if (!courseProgress?.completed_quizzes) return new Set<number>();
-
-    // completed_quizzes is an array of objects: Array<{quiz_id: number, completed_at: string}>
-    const quizzes = courseProgress.completed_quizzes;
-    if (Array.isArray(quizzes)) {
-      const ids = quizzes
-        .filter(
-          (q) =>
-            typeof q === "object" &&
-            q !== null &&
-            "quiz_id" in q &&
-            typeof (q as { quiz_id: unknown }).quiz_id === "number"
-        )
-        .map((q) => (q as { quiz_id: number }).quiz_id);
-      return new Set(ids);
-    }
-    return new Set<number>();
-  }, [courseProgress?.completed_quizzes]);
+    return deriveCompletedQuizIds(
+      modulesSource,
+      courseProgress?.completed_quizzes,
+      courseProgress?.quizzes_completed
+    );
+  }, [
+    modulesSource,
+    courseProgress?.completed_quizzes,
+    courseProgress?.quizzes_completed,
+  ]);
 
   const outline = useMemo(() => {
     if (!modulesSource.length) {
@@ -404,18 +407,21 @@ export const CoursePlayer = () => {
     isQuizScreen &&
     (!currentQuizState ||
       currentQuizState.status !== "success" ||
-      currentQuizState.progressStatus !== "success");
+      (currentQuizState.progressStatus !== "success" &&
+        currentQuizState.progressStatus !== "queued"));
   const canGoPrev = currentScreenIndex > 0;
   const canGoNext = currentScreenIndex < totalScreens - 1;
   const nextButtonDisabled = isLastScreen
     ? lessonCompletionStatus === "submitting" ||
       lessonCompletionStatus === "success" ||
+      lessonCompletionStatus === "queued" ||
       isQuizNextLocked
     : !canGoNext || isQuizNextLocked;
   const nextButtonLabel = isLastScreen
     ? lessonCompletionStatus === "submitting"
       ? "Completing..."
-      : lessonCompletionStatus === "success"
+      : lessonCompletionStatus === "success" ||
+        lessonCompletionStatus === "queued"
       ? "Lesson Completed"
       : "Complete Lesson"
     : "Next";
@@ -622,6 +628,9 @@ export const CoursePlayer = () => {
           quiz_id: quizId,
           completed: true,
         });
+        queryClient.invalidateQueries({
+          queryKey: ["course-progress", courseId],
+        });
 
         setQuizStates((prev) => ({
           ...prev,
@@ -632,6 +641,18 @@ export const CoursePlayer = () => {
           },
         }));
       } catch (progressError) {
+        if (progressError instanceof OfflineQueuedError) {
+          debugLog("CoursePlayer", "Quiz progress queued offline", { quizId });
+          setQuizStates((prev) => ({
+            ...prev,
+            [quizId]: {
+              ...prev[quizId],
+              progressStatus: "queued",
+              progressError: undefined,
+            },
+          }));
+          return;
+        }
         const message =
           progressError instanceof Error
             ? progressError.message
@@ -783,6 +804,21 @@ export const CoursePlayer = () => {
       );
     }
 
+    if (progressStatus === "queued") {
+      blocks.push(
+        <div
+          key="progress-queued"
+          className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-3 text-sm text-amber-700 dark:text-amber-300"
+        >
+          <WifiOff className="w-5 h-5 shrink-0" />
+          <span>
+            Saved offline — your progress and XP will sync automatically once
+            you're back online.
+          </span>
+        </div>
+      );
+    }
+
     if (progressStatus === "error" && quizState.progressError) {
       blocks.push(
         <div
@@ -845,6 +881,20 @@ export const CoursePlayer = () => {
         },
       }));
     } catch (error) {
+      if (error instanceof OfflineQueuedError) {
+        debugLog("CoursePlayer", "Quiz progress retry queued offline", {
+          quizId,
+        });
+        setQuizStates((prev) => ({
+          ...prev,
+          [quizId]: {
+            ...prev[quizId],
+            progressStatus: "queued",
+            progressError: undefined,
+          },
+        }));
+        return;
+      }
       const message =
         error instanceof Error
           ? error.message
@@ -877,7 +927,10 @@ export const CoursePlayer = () => {
       return;
     }
 
-    if (lessonCompletionStatus === "success") {
+    if (
+      lessonCompletionStatus === "success" ||
+      lessonCompletionStatus === "queued"
+    ) {
       setShowCompletionModal(true);
       return;
     }
@@ -886,21 +939,32 @@ export const CoursePlayer = () => {
     setLessonCompletionError(null);
 
     try {
-      const { progress, course_completed } = await updateCourseProgress(
-        courseId,
-        {
+      const { progress, course_completed, coins_awarded } =
+        await updateCourseProgress(courseId, {
           lesson_id: lessonContent.id,
           completed: true,
-        }
-      );
+        });
+      queryClient.invalidateQueries({
+        queryKey: ["course-progress", courseId],
+      });
+      if (coins_awarded) {
+        queryClient.invalidateQueries({ queryKey: ["wallet"] });
+      }
 
       setLessonCompletion({
         progress,
         courseCompleted: course_completed,
+        coinsAwarded: coins_awarded,
       });
       setLessonCompletionStatus("success");
       setShowCompletionModal(true);
     } catch (error) {
+      if (error instanceof OfflineQueuedError) {
+        setLessonCompletion(null);
+        setLessonCompletionStatus("queued");
+        setShowCompletionModal(true);
+        return;
+      }
       const message =
         error instanceof Error
           ? error.message
@@ -1420,6 +1484,14 @@ export const CoursePlayer = () => {
                 Outstanding work! You've completed every lesson in this course.
               </p>
             ) : null}
+            {lessonCompletion?.coinsAwarded && (
+              <div className="flex items-center justify-center gap-3 mb-6 py-4 px-4 rounded-xl bg-gradient-to-r from-amber-100 to-amber-50 dark:from-amber-900/30 dark:to-amber-900/10 border border-amber-300 dark:border-amber-700">
+                <Coins className="w-8 h-8 text-amber-500 flex-shrink-0" />
+                <p className="text-lg font-bold text-amber-700 dark:text-amber-300">
+                  +{lessonCompletion.coinsAwarded.amount} Vybe Coins earned!
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-2 mb-4">
               <div className=" rounded-xl text-center">
                 <p className="text-[.75rem] uppercase ml-2 inline-block tracking-wide text-gray-500 dark:text-gray-400">
@@ -1476,6 +1548,30 @@ export const CoursePlayer = () => {
                   : "Continue Learning"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {showCompletionModal && !lessonCompletion && lessonCompletionStatus === "queued" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+          <div className="relative z-10 w-full md:max-w-md mx-auto px-6 py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/40 dark:border-gray-700 text-center">
+            <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
+              <WifiOff className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              Saved Offline
+            </h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              You're offline right now, so this lesson was saved on your
+              device. Your progress and XP will sync automatically as soon as
+              you're back online.
+            </p>
+            <button
+              type="button"
+              onClick={handleCompletionContinue}
+              className="w-full px-6 py-3 bg-linear-to-r from-azure-500 to-blue-violet-600 hover:from-azure-600 hover:to-blue-violet-600 text-white rounded-xl font-semibold shadow-lg transition-transform transform hover:-translate-y-0.5"
+            >
+              Continue Learning
+            </button>
           </div>
         </div>
       )}

@@ -34,8 +34,32 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        globPatterns: [
+          "**/*.{js,css,html,ico,png,svg}",
+          // App-chrome logos (TopNav, auth pages): ~60 KB total, precached so
+          // they still render offline on a first visit, as the PNGs they
+          // replaced did. Files are named `brand-*` by scripts/optimize-assets.mjs.
+          "assets/brand-*.webp",
+        ],
         runtimeCaching: [
+          {
+            // Landing-page art (.webp) and brand fonts aren't in the precache
+            // list above, so first install stays small on slow connections.
+            // Cache them the first time they're viewed so the landing page
+            // still renders offline afterwards. Hashed filenames make
+            // CacheFirst safe.
+            urlPattern: ({ sameOrigin, url }) =>
+              sameOrigin && /\.(?:webp|ttf|woff2?)$/i.test(url.pathname),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "landing-assets",
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: /^https:\/\/api\./,
             handler: "NetworkFirst",
