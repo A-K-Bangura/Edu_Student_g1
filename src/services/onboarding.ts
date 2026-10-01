@@ -6,7 +6,6 @@ import type {
   Department,
   Organization,
   OnboardingData,
-  OnboardingResponse,
   AcademicLevel,
 } from "../types/onboarding";
 
@@ -41,35 +40,6 @@ export const getDepartments = async (
     `/universities/${universityId}/faculties/${facultyId}/departments`
   );
   return response.data.data || [];
-};
-
-// Submit onboarding data
-export const submitOnboarding = async (
-  data: OnboardingData
-): Promise<OnboardingResponse> => {
-  const response = await api.post<ApiResponse<OnboardingResponse>>(
-    "/auth/onboarding",
-    data
-  );
-
-  if (!response.data.success || !response.data.data) {
-    throw new Error(response.data.message || "Onboarding submission failed");
-  }
-
-  // Update user in localStorage
-  const currentUser = localStorage.getItem("user");
-  if (currentUser) {
-    const user = JSON.parse(currentUser);
-    user.firstname = response.data.data.user.firstname;
-    user.lastname = response.data.data.user.lastname;
-    user.university = response.data.data.user.university;
-    user.faculty = response.data.data.user.faculty;
-    user.department = response.data.data.user.department;
-    user.level = response.data.data.user.level;
-    localStorage.setItem("user", JSON.stringify(user));
-  }
-
-  return response.data.data;
 };
 
 /** Draft payload allows unset level while Partial<OnboardingData> does not */

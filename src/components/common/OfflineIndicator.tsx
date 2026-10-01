@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Wifi, WifiOff } from "lucide-react";
 import { initSync } from "../../services/sync";
 
 export const OfflineIndicator = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncInProgress, setSyncInProgress] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    const cleanup = initSync();
+    // A synced quiz/lesson-completion action changed server-side XP,
+    // streaks, and course progress — refetch everything rather than trying
+    // to guess which query keys are affected.
+    const cleanup = initSync(() => {
+      queryClient.invalidateQueries();
+    });
 
     const handleOnline = () => {
       setIsOnline(true);
@@ -27,7 +34,7 @@ export const OfflineIndicator = () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []);
+  }, [queryClient]);
 
   if (isOnline && !syncInProgress) return null;
 

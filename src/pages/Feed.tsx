@@ -29,11 +29,14 @@ import {
   getRemainingFeedTime,
   exchangeXpForFeedTime,
   endFeedSession,
+  isFeedLockedError,
 } from "../services/feed";
 import { getDashboard } from "../services/dashboard";
 import { searchPosts } from "../services/search";
 import { formatRelativeTime } from "../utils/format";
-import { getCurrentUser } from "../services/auth";
+import { getCurrentUser, isAuthenticated } from "../services/auth";
+import { requireAuthOrRedirect } from "../utils/guestGuard";
+import { GuestBanner } from "../components/common/GuestBanner";
 import type {
   FeedFilters,
   PostType,
@@ -43,6 +46,39 @@ import type {
 } from "../types/feed";
 import type { PaginatedResponse } from "../types";
 import type { PostSearchItem } from "../types/search";
+
+type FeedPages = InfiniteData<PaginatedResponse<FeedPost>>;
+
+/** Applies `update` to one post in every loaded page of the infinite feed cache. */
+const updateFeedPost = (
+  data: FeedPages,
+  postId: number,
+  update: (post: FeedPost) => FeedPost
+): FeedPages => ({
+  ...data,
+  pages: data.pages.map((page) => ({
+    ...page,
+    data: page.data.map((p) => (p.id === postId ? update(p) : p)),
+  })),
+});
+
+/**
+ * The feed endpoints return no `name` for authors or commenters — build one
+ * from `display_name` / `firstname` / `lastname` (STUDENT_API_PAYLOADS §41, §44).
+ */
+type NamedPerson = Pick<
+  PostAuthor,
+  "display_name" | "name" | "firstname" | "lastname"
+>;
+
+const getDisplayName = (
+  person: NamedPerson | null | undefined,
+  fallback: string
+): string =>
+  person?.display_name ||
+  person?.name ||
+  `${person?.firstname ?? ""} ${person?.lastname ?? ""}`.trim() ||
+  fallback;
 
 export const Feed = () => {
   const queryClient = useQueryClient();
@@ -65,11 +101,13 @@ export const Feed = () => {
   const feedTimeIntervalRef = useRef<number | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-  // Check feed time on mount
+  // Check feed time on mount — feed-time balance is a per-student concept,
+  // so this (and the lock it drives) never applies to a guest.
   const { data: feedTime, refetch: refetchFeedTime } = useQuery({
     queryKey: ["feed-time"],
     queryFn: getRemainingFeedTime,
     retry: false,
+    enabled: isAuthenticated(),
   });
 
   // Check if feed is locked
@@ -149,10 +187,14 @@ export const Feed = () => {
         feedTimeIntervalRef.current = null;
       }
 
-      // Fire and forget; errors are swallowed to avoid blocking navigation
-      endFeedSession().catch(() => {
-        // no-op
-      });
+      // Feed sessions are a per-student concept — nothing to end for a guest,
+      // and this endpoint still requires auth.
+      if (isAuthenticated()) {
+        // Fire and forget; errors are swallowed to avoid blocking navigation
+        endFeedSession().catch(() => {
+          // no-op
+        });
+      }
     };
   }, []);
 
@@ -179,12 +221,9 @@ export const Feed = () => {
           ...filters,
           page: pageParam,
         });
-      } catch (error: any) {
+      } catch (error) {
         // Handle FEED_LOCKED error
-        if (
-          error?.response?.status === 403 ||
-          error?.response?.data?.error_code === "FEED_LOCKED"
-        ) {
+        if (isFeedLockedError(error)) {
           setFeedLocked(true);
           setShowLockModal(true);
         }
@@ -192,35 +231,22 @@ export const Feed = () => {
       }
     },
     getNextPageParam: (lastPage) => {
-      const meta = lastPage.meta;
-      if (!meta) return undefined;
-      if (meta.current_page >= meta.last_page) return undefined;
-      return meta.current_page + 1;
+      if (lastPage.current_page >= lastPage.last_page) return undefined;
+      return lastPage.current_page + 1;
     },
     enabled: !isSearchMode || !searchQuery.trim(),
-    retry: (failureCount, error: any) => {
+    retry: (failureCount, error) => {
       // Don't retry on FEED_LOCKED errors
-      if (
-        error?.response?.status === 403 ||
-        error?.response?.data?.error_code === "FEED_LOCKED"
-      ) {
-        return false;
-      }
+      if (isFeedLockedError(error)) return false;
       return failureCount < 3;
     },
   });
 
   // Handle feed error separately
   useEffect(() => {
-    if (feedError) {
-      const error = feedError as any;
-      if (
-        error?.response?.status === 403 ||
-        error?.response?.data?.error_code === "FEED_LOCKED"
-      ) {
-        setFeedLocked(true);
-        setShowLockModal(true);
-      }
+    if (isFeedLockedError(feedError)) {
+      setFeedLocked(true);
+      setShowLockModal(true);
     }
   }, [feedError]);
 
@@ -257,28 +283,22 @@ export const Feed = () => {
     mutationFn: toggleLikePost,
     onMutate: async (postId: number) => {
       await queryClient.cancelQueries({ queryKey: ["feed-posts"] });
-      const previous = queryClient.getQueryData<any>(["feed-posts", filters]);
+      const previous = queryClient.getQueryData<FeedPages>([
+        "feed-posts",
+        filters,
+      ]);
 
-      if (previous && previous.pages) {
-        const next = {
-          ...previous,
-          pages: previous.pages.map((page: any) => ({
-            ...page,
-            data: page.data.map((p: any) =>
-              p.id === postId
-                ? {
-                    ...p,
-                    has_liked: !p.has_liked,
-                    likes_count: p.has_liked
-                      ? Math.max(0, (p.likes_count || 0) - 1)
-                      : (p.likes_count || 0) + 1,
-                  }
-                : p
-            ),
-          })),
-        };
-
-        queryClient.setQueryData(["feed-posts", filters], next);
+      if (previous) {
+        queryClient.setQueryData<FeedPages>(
+          ["feed-posts", filters],
+          updateFeedPost(previous, postId, (p) => ({
+            ...p,
+            has_liked: !p.has_liked,
+            likes_count: p.has_liked
+              ? Math.max(0, (p.likes_count || 0) - 1)
+              : (p.likes_count || 0) + 1,
+          }))
+        );
       }
 
       return { previous };
@@ -298,25 +318,19 @@ export const Feed = () => {
     mutationFn: (postId: number) => sharePost(postId),
     onMutate: async (postId: number) => {
       await queryClient.cancelQueries({ queryKey: ["feed-posts"] });
-      const previous = queryClient.getQueryData<any>(["feed-posts", filters]);
+      const previous = queryClient.getQueryData<FeedPages>([
+        "feed-posts",
+        filters,
+      ]);
 
-      if (previous && previous.pages) {
-        const next = {
-          ...previous,
-          pages: previous.pages.map((page: any) => ({
-            ...page,
-            data: page.data.map((p: any) =>
-              p.id === postId
-                ? {
-                    ...p,
-                    shares_count: (p.shares_count || 0) + 1,
-                  }
-                : p
-            ),
-          })),
-        };
-
-        queryClient.setQueryData(["feed-posts", filters], next);
+      if (previous) {
+        queryClient.setQueryData<FeedPages>(
+          ["feed-posts", filters],
+          updateFeedPost(previous, postId, (p) => ({
+            ...p,
+            shares_count: (p.shares_count || 0) + 1,
+          }))
+        );
       }
 
       return { previous };
@@ -332,6 +346,7 @@ export const Feed = () => {
   });
 
   const handleLike = (postId: number) => {
+    if (!requireAuthOrRedirect(navigate)) return;
     void (async () => {
       const canAccess = await ensureFeedAccess();
       if (!canAccess) return;
@@ -339,16 +354,17 @@ export const Feed = () => {
     })();
   };
 
-  const handleShare = async (post: any) => {
+  const handleShare = async (post: FeedPost) => {
+    if (!requireAuthOrRedirect(navigate)) return;
     const canAccess = await ensureFeedAccess();
     if (!canAccess) return;
 
-    const url = post?.slug
+    const url = post.slug
       ? `${window.location.origin}/feed/${post.slug}`
       : `${window.location.origin}/feed/${post.id}`;
     try {
-      if ((navigator as any).share) {
-        await (navigator as any).share({
+      if (typeof navigator.share === "function") {
+        await navigator.share({
           url,
           title: post.title,
           text: post.content_text,
@@ -367,27 +383,17 @@ export const Feed = () => {
     mutationFn: ({ postId, content }: { postId: number; content: string }) =>
       commentOnPost(postId, content),
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(["feed-posts", filters], (oldData: any) => {
-        if (!oldData || !oldData.pages) return oldData;
+      queryClient.setQueryData<FeedPages>(["feed-posts", filters], (oldData) => {
+        if (!oldData) return oldData;
 
-        const updated = {
-          ...oldData,
-          pages: oldData.pages.map((page: any) => ({
-            ...page,
-            data: page.data.map((p: any) => {
-              if (p.id !== variables.postId) return p;
-              const nextComments = [...(p.comments || []), data.comment];
-              return {
-                ...p,
-                comments: nextComments,
-                comments_count:
-                  (p.comments_count || nextComments.length) + (p.comments ? 0 : 0),
-              };
-            }),
-          })),
-        };
-
-        return updated;
+        return updateFeedPost(oldData, variables.postId, (p) => {
+          const nextComments = [...(p.comments || []), data.comment];
+          return {
+            ...p,
+            comments: nextComments,
+            comments_count: p.comments_count || nextComments.length,
+          };
+        });
       });
 
       // clear input
@@ -443,6 +449,7 @@ export const Feed = () => {
     queryKey: ["dashboard"],
     queryFn: getDashboard,
     retry: 1,
+    enabled: isAuthenticated(),
   });
 
   const currentUser = getCurrentUser();
@@ -526,6 +533,7 @@ export const Feed = () => {
   return (
     <PageShell>
       <div className="max-w-4xl mx-auto px-4 py-8">
+        <GuestBanner />
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
@@ -684,20 +692,12 @@ export const Feed = () => {
                   <button
                     className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden flex items-center justify-center"
                     onClick={() => setActiveAuthor(post.author || null)}
-                    title={
-                      post?.author?.display_name ||
-                      post?.author?.name ||
-                      "Author"
-                    }
+                    title={getDisplayName(post.author, "Author")}
                   >
                     {post?.author?.avatar_url ? (
                       <img
                         src={post.author.avatar_url}
-                        alt={
-                          post?.author?.display_name ||
-                          post?.author?.name ||
-                          "Author"
-                        }
+                        alt={getDisplayName(post.author, "Author")}
                         className="w-full h-full object-cover rounded-full"
                       />
                     ) : (
@@ -709,9 +709,7 @@ export const Feed = () => {
                       onClick={() => setActiveAuthor(post.author || null)}
                       className="font-semibold text-gray-900 dark:text-white hover:underline"
                     >
-                      {post?.author?.display_name ||
-                        post?.author?.name ||
-                        "Unknown Author"}
+                      {getDisplayName(post.author, "Unknown Author")}
                     </button>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       {formatRelativeTime(new Date(post.created_at))} •{" "}
@@ -727,16 +725,20 @@ export const Feed = () => {
                       {post.title}
                     </h3>
                   )}
-                  {post.content_text && (
-                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                      {post.content_text}
-                    </p>
-                  )}
-                  {post.content_html && (
+                  {/* The API sends the same body as both `content_html` and
+                      `content_text` (§41) — render one, preferring the rich
+                      HTML. Search results only carry `content_text`. */}
+                  {post.content_html ? (
                     <div
                       className="prose dark:prose-invert max-w-none"
                       dangerouslySetInnerHTML={{ __html: post.content_html }}
                     />
+                  ) : (
+                    post.content_text && (
+                      <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                        {post.content_text}
+                      </p>
+                    )
                   )}
                   {post.media_url && (
                     <div className="mt-4">
@@ -803,18 +805,14 @@ export const Feed = () => {
                       ) {
                         try {
                           const detail = await getPostDetail(post.id);
-                          queryClient.setQueryData(
+                          queryClient.setQueryData<FeedPages>(
                             ["feed-posts", filters],
-                            (oldData: any) => {
-                              if (!oldData) return oldData;
-                              const updated = { ...oldData };
-                              updated.data = updated.data.map((p: any) =>
-                                p.id === post.id
-                                  ? { ...p, comments: detail.comments || [] }
-                                  : p
-                              );
-                              return updated;
-                            }
+                            (oldData) =>
+                              oldData &&
+                              updateFeedPost(oldData, post.id, (p) => ({
+                                ...p,
+                                comments: detail.comments || [],
+                              }))
                           );
                         } catch {
                           // ignore
@@ -853,14 +851,10 @@ export const Feed = () => {
                         {post.comments.map((c: PostComment) => (
                           <div key={c.id} className="flex items-start gap-3">
                             <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
-                              {(c.user as any)?.avatar_url ? (
+                              {c.user?.avatar_url ? (
                                 <img
-                                  src={(c.user as any).avatar_url}
-                                  alt={
-                                    (c.user as any)?.display_name ||
-                                    (c.user as any)?.name ||
-                                    "User"
-                                  }
+                                  src={c.user.avatar_url}
+                                  alt={getDisplayName(c.user, "User")}
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
@@ -869,12 +863,7 @@ export const Feed = () => {
                             </div>
                             <div>
                               <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {(c.user as any)?.display_name ||
-                                  (c.user as any)?.name ||
-                                  `${(c.user as any)?.firstname ?? ""} ${
-                                    (c.user as any)?.lastname ?? ""
-                                  }`.trim() ||
-                                  "User"}
+                                {getDisplayName(c.user, "User")}
                               </div>
                               <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                                 {c.content}
@@ -895,6 +884,7 @@ export const Feed = () => {
                         e.preventDefault();
                         const content = (commentInputs[post.id] || "").trim();
                         if (!content) return;
+                        if (!requireAuthOrRedirect(navigate)) return;
 
                         const canAccess = await ensureFeedAccess();
                         if (!canAccess) return;
@@ -1004,15 +994,11 @@ export const Feed = () => {
               ✕
             </button>
             <div className="flex items-center gap-3">
-              <div className="w=14 h-14 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center">
+              <div className="w-14 h-14 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center">
                 {activeAuthor.avatar_url ? (
                   <img
                     src={activeAuthor.avatar_url}
-                    alt={
-                      activeAuthor.name ||
-                      (activeAuthor as any)?.display_name ||
-                      "Author"
-                    }
+                    alt={getDisplayName(activeAuthor, "Author")}
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -1021,33 +1007,28 @@ export const Feed = () => {
               </div>
               <div>
                 <div className="font-semibold text-lg text-gray-900 dark:text-white">
-                  {(activeAuthor as any).display_name ||
-                    activeAuthor.name ||
-                    `${(activeAuthor as any).firstname ?? ""} ${
-                      (activeAuthor as any).lastname ?? ""
-                    }`.trim() ||
-                    "Author"}
+                  {getDisplayName(activeAuthor, "Author")}
                 </div>
-                {(activeAuthor as any).role?.name && (
+                {activeAuthor.role?.name && (
                   <div className="text-sm text-gray-500">
-                    {(activeAuthor as any).role?.name}
+                    {activeAuthor.role.name}
                   </div>
                 )}
-                {(activeAuthor as any).university?.name && (
+                {activeAuthor.university?.name && (
                   <div className="text-sm text-gray-500">
-                    {(activeAuthor as any).university.name}
+                    {activeAuthor.university.name}
                   </div>
                 )}
               </div>
             </div>
-            {(activeAuthor as any).bio && (
+            {activeAuthor.bio && (
               <p className="mt-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                {String((activeAuthor as any).bio)}
+                {activeAuthor.bio}
               </p>
             )}
-            {(activeAuthor as any).social_links && (
+            {activeAuthor.social_links && (
               <div className="mt-4 space-y-1 text-sm text-azure-600 dark:text-azure-400">
-                {Object.entries((activeAuthor as any).social_links).map(
+                {Object.entries(activeAuthor.social_links).map(
                   ([k, v]) => (
                     <div key={k} className="truncate">
                       <span className="font-medium">{k}: </span>

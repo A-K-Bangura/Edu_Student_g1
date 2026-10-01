@@ -39,15 +39,12 @@ export const uploadToCloudinary = async (
   formData.append("signature", signatureData.signature);
   formData.append("timestamp", signatureData.timestamp.toString());
   formData.append("api_key", signatureData.api_key);
-  formData.append("upload_preset", signatureData.upload_preset);
+  formData.append("folder", signatureData.folder);
 
-  const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${signatureData.cloud_name}/image/upload`,
-    {
-      method: "POST",
-      body: formData,
-    }
-  );
+  const response = await fetch(signatureData.upload_url, {
+    method: "POST",
+    body: formData,
+  });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

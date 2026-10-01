@@ -17,7 +17,7 @@ import {
   getUniversityLeaderboard,
   getFacultyLeaderboard,
   getDepartmentLeaderboard,
-  getAchievementLeaderboard,
+  getOrganizationLeaderboard,
 } from "../services/leaderboard";
 import { getCurrentUser } from "../services/auth";
 import { getStudentProfile } from "../services/profile";
@@ -27,7 +27,7 @@ import type {
   UniversityLeaderboard,
   FacultyLeaderboard,
   DepartmentLeaderboard,
-  AchievementLeaderboard,
+  OrganizationLeaderboard,
   LeaderboardEntry,
 } from "../types/leaderboard";
 
@@ -36,39 +36,39 @@ type LeaderboardType =
   | "university"
   | "faculty"
   | "department"
-  | "achievements";
+  | "organization";
 
 export const Leaderboard = () => {
   const [leaderboardType, setLeaderboardType] =
     useState<LeaderboardType>("overall");
   const [limit] = useState(50);
-  const [offset] = useState(0);
   const [selectedStudentId, setSelectedStudentId] = useState<
     string | number | null
   >(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Get current user to extract university, faculty, and department IDs
+  // Get current user to extract university, faculty, department, and organization IDs
   const currentUser = getCurrentUser();
   const universityId = currentUser?.university?.id;
   const facultyId = currentUser?.faculty?.id;
   const departmentId = currentUser?.department?.id;
+  const organizationId = currentUser?.organization?.id;
 
   const { data: leaderboardData, isLoading } = useQuery<
     | LeaderboardData
     | UniversityLeaderboard
     | FacultyLeaderboard
     | DepartmentLeaderboard
-    | AchievementLeaderboard
+    | OrganizationLeaderboard
   >({
     queryKey: [
       "leaderboard",
       leaderboardType,
       limit,
-      offset,
       universityId,
       facultyId,
       departmentId,
+      organizationId,
     ],
     queryFn: async () => {
       switch (leaderboardType) {
@@ -76,29 +76,32 @@ export const Leaderboard = () => {
           if (!universityId) {
             throw new Error("University ID not available");
           }
-          return getUniversityLeaderboard(universityId, limit, offset);
+          return getUniversityLeaderboard(universityId, limit);
         case "faculty":
           if (!facultyId) {
             throw new Error("Faculty ID not available");
           }
-          return getFacultyLeaderboard(facultyId, limit, offset);
+          return getFacultyLeaderboard(facultyId, limit);
         case "department":
           if (!departmentId) {
             throw new Error("Department ID not available");
           }
-          return getDepartmentLeaderboard(departmentId, limit, offset);
-        case "achievements":
-          return getAchievementLeaderboard(limit, offset);
+          return getDepartmentLeaderboard(departmentId, limit);
+        case "organization":
+          if (!organizationId) {
+            throw new Error("Organization ID not available");
+          }
+          return getOrganizationLeaderboard(organizationId, limit);
         default:
-          return getLeaderboard(limit, offset);
+          return getLeaderboard(limit);
       }
     },
     enabled:
       leaderboardType === "overall" ||
-      leaderboardType === "achievements" ||
       (leaderboardType === "university" && !!universityId) ||
       (leaderboardType === "faculty" && !!facultyId) ||
-      (leaderboardType === "department" && !!departmentId),
+      (leaderboardType === "department" && !!departmentId) ||
+      (leaderboardType === "organization" && !!organizationId),
   });
 
   const entries = leaderboardData?.leaderboard || [];
@@ -195,16 +198,18 @@ export const Leaderboard = () => {
             >
               Department
             </button>
-            <button
-              onClick={() => setLeaderboardType("achievements")}
-              className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-medium whitespace-nowrap transition-colors ${
-                leaderboardType === "achievements"
-                  ? "bg-azure-500 text-white"
-                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-              }`}
-            >
-              Achievements
-            </button>
+            {!!organizationId && (
+              <button
+                onClick={() => setLeaderboardType("organization")}
+                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-medium whitespace-nowrap transition-colors ${
+                  leaderboardType === "organization"
+                    ? "bg-azure-500 text-white"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                }`}
+              >
+                Organization
+              </button>
+            )}
           </div>
         </div>
 

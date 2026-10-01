@@ -95,20 +95,30 @@ export interface InsightsData {
 export interface ReportGeneration {
   id: number;
   uuid: string;
-  status: "generating" | "completed" | "failed";
-  created_at: string;
+  report_type: "learning_progress" | "engagement_summary" | "performance_analysis";
+  status: "completed" | "failed";
+  period_start: string;
+  period_end: string;
+}
+
+// GET .../reports/{report}/download response — JSON metadata, not a file stream
+export interface ReportDownload {
+  download_url: string;
+  file_size: string;
+  file_format: string;
 }
 
 // Report
 export interface Report {
   id: number;
   uuid: string;
-  period: "week" | "month" | "quarter" | "year";
-  status: "generating" | "completed" | "failed";
-  download_url?: string;
+  report_type: "learning_progress" | "engagement_summary" | "performance_analysis";
+  status: "completed" | "failed";
+  period_start: string;
+  period_end: string;
   created_at: string;
 }
 
-// Report List
+// Report List — the raw paginator is returned directly as `data`, no `reports` wrapper
 export type ReportList = Report[];
 

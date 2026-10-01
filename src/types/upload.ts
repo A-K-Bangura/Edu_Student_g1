@@ -10,17 +10,8 @@ export interface UploadPresignResponse {
   timestamp: number;
   cloud_name: string;
   api_key: string;
-  upload_preset: string;
   folder: string;
-  resource_type: string;
-  max_size_bytes: number;
-  allowed_types: string[];
-  transformations?: {
-    width?: number;
-    height?: number;
-    crop?: string;
-    quality?: string;
-  };
+  upload_url: string;
 }
 
 // Cloudinary upload response types

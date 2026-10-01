@@ -2,9 +2,10 @@ import { useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
-  CheckCircle,
+  Check,
   Circle,
   Lock,
+  X,
 } from "lucide-react";
 import type { CourseOutline } from "../../types/lesson";
 
@@ -25,9 +26,6 @@ export const OutlineSidebar = ({
   isOpen,
   onToggle,
 }: OutlineSidebarProps) => {
-  // onToggle is kept for interface compatibility but toggle is handled in parent component
-  void onToggle;
-
   const [expandedModules, setExpandedModules] = useState<number[]>([
     currentModuleId || outline.modules[0]?.id || 0,
   ]);
@@ -49,10 +47,19 @@ export const OutlineSidebar = ({
           fixed md:sticky top-20 left-0 h-[calc(100vh-5rem)] w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg md:shadow-none z-30 transition-transform duration-300 overflow-y-auto
         `}
       >
-        <div className="p-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Course Outline
-          </h3>
+        <div className="p-4 pb-20 md:pb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Course Outline
+            </h3>
+            <button
+              onClick={onToggle}
+              aria-label="Close course outline"
+              className="md:hidden p-1 -m-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
           {outline.modules.map((module) => {
             const isExpanded = expandedModules.includes(module.id);
@@ -136,7 +143,9 @@ export const OutlineSidebar = ({
                             {isLocked ? (
                               <Lock className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" />
                             ) : isCompleted ? (
-                              <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 fill-current" />
+                              <span className="w-4 h-4 rounded-full bg-green-600 dark:bg-green-500 flex items-center justify-center shrink-0">
+                                <Check className="w-6 h-6 yellow" strokeWidth={3} />
+                              </span>
                             ) : (
                               <Circle className="w-4 h-4 shrink-0" />
                             )}

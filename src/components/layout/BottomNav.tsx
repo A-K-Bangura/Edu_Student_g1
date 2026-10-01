@@ -1,16 +1,25 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, BookOpen, Trophy, User, MessageSquare } from "lucide-react";
-// import logoMain from "../../assets/logo/univybe_logo_main.png";
+import { Home, BookOpen, Trophy, User, MessageSquare, LogIn } from "lucide-react";
+import { isAuthenticated } from "../../services/auth";
+
 export const BottomNav = () => {
   const location = useLocation();
+  const authenticated = isAuthenticated();
 
-  const navItems = [
-    { path: "/dashboard", icon: Home, label: "Home" },
-    { path: "/feed", icon: MessageSquare, label: "Feed" },
-    { path: "/courses", icon: BookOpen, label: "Courses" },
-    { path: "/leaderboard", icon: Trophy, label: "Leaderboard" },
-    { path: "/profile", icon: User, label: "Profile" },
-  ];
+  const navItems = authenticated
+    ? [
+        { path: "/dashboard", icon: Home, label: "Home" },
+        { path: "/feed", icon: MessageSquare, label: "Feed" },
+        { path: "/courses", icon: BookOpen, label: "Courses" },
+        { path: "/leaderboard", icon: Trophy, label: "Leaderboard" },
+        { path: "/profile", icon: User, label: "Profile" },
+      ]
+    : [
+        { path: "/", icon: Home, label: "Home" },
+        { path: "/feed", icon: MessageSquare, label: "Feed" },
+        { path: "/courses", icon: BookOpen, label: "Courses" },
+        { path: "/auth/login", icon: LogIn, label: "Log In" },
+      ];
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -21,7 +30,7 @@ export const BottomNav = () => {
           <Link
             key={item.path}
             to={item.path}
-            className={`flex flex-col items-center justify-center py-2 px-0.5 sm:py-3 sm:px-1 transition-colors flex-1 min-w-0 max-w-[20%] ${
+            className={`flex flex-col items-center justify-center py-2 px-0.5 sm:py-3 sm:px-1 transition-colors flex-1 min-w-0 ${
               isActive(item.path)
                 ? "text-azure-500"
                 : "text-gray-500 dark:text-gray-400 hover:text-azure-500"

@@ -44,17 +44,3 @@ export interface OnboardingData {
 
 /** Local draft / form state may use "" for level until the user selects one */
 export type OnboardingDraftLevel = AcademicLevel | "";
-
-export interface OnboardingResponse {
-  user_id: number;
-  user: {
-    id: number;
-    email: string;
-    firstname: string;
-    lastname: string;
-    university: string;
-    faculty: string;
-    department: string;
-    level: string;
-  };
-}

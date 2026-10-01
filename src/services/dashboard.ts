@@ -86,7 +86,7 @@ export const getDashboardStats = async (): Promise<LegacyDashboardStats> => {
   return {
     xp_total: dashboard.student.total_xp,
     streak_days: dashboard.stats.current_streak,
-    current_level: dashboard.student.level,
+    current_level: dashboard.student.score_level,
     xp_to_next_level: 0, // Will be calculated from XP
     courses_enrolled: dashboard.stats.enrolled_courses,
     courses_completed: dashboard.stats.completed_courses,

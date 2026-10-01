@@ -2,9 +2,13 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { Mail, AlertCircle, CheckCircle } from "lucide-react";
-import logoMain from "../../assets/logo/univybe_logo_main.png";
+import { useUIStore } from "../../store/uiStore";
+import { brandIconBlack320, brandIconWhite320 } from "../../assets/brand";
+import { GuestHeader } from "../../components/layout/GuestHeader";
 
 export const Signup = () => {
+  const darkMode = useUIStore((state) => state.darkMode);
+  const logo = darkMode ? brandIconWhite320 : brandIconBlack320;
   const { signup, isLoading, error } = useAuth();
   const [email, setEmail] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -37,7 +41,8 @@ export const Signup = () => {
 
   if (emailSent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 md:pt-16">
+        <GuestHeader variant="app" />
         <div className="max-w-md w-full text-center">
           <div className="w-20 h-20 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
@@ -60,12 +65,19 @@ export const Signup = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-12 md:pt-24">
+      <GuestHeader variant="app" />
       <div className="max-w-md w-full">
         {/* Logo */}
         <div className="flex justify-center mb-2">
           <div className="w-40 h-40 rounded-2xl flex items-center justify-center">
-            <img src={logoMain} alt="logo" className="w-40 h-40" /> 
+            <img
+              src={logo.src}
+              width={logo.width}
+              height={logo.height}
+              alt="logo"
+              className="w-40 h-40"
+            />
           </div>
         </div>
 

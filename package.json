@@ -8,8 +8,13 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "type-check": "tsc --noEmit",
-    "test": "echo \"Tests will be added in later stages\" && exit 0"
+    "type-check": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "icons:generate": "node scripts/generate-pwa-icons.mjs",
+    "assets": "node scripts/optimize-assets.mjs",
+    "assets:landing": "node scripts/optimize-assets.mjs landing",
+    "assets:brand": "node scripts/optimize-assets.mjs brand"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.16",
@@ -39,10 +44,13 @@
     "globals": "^16.4.0",
     "idb": "^8.0.2",
     "jsdom": "^25.0.1",
+    "png-to-ico": "^3.0.2",
+    "sharp": "^0.35.5",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.45.0",
     "vite": "^7.1.7",
     "vite-plugin-pwa": "^1.1.0",
+    "vitest": "^5.0.2",
     "workbox-window": "^7.1.0"
   }
 }

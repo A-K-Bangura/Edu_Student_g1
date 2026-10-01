@@ -1,9 +1,20 @@
-export type PostType = "question" | "announcement" | "resource" | "discussion";
+export type PostType =
+  | "question"
+  | "announcement"
+  | "resource"
+  | "discussion"
+  | "tip"
+  | "meme";
 
 export interface PostAuthor {
   id: number;
-  name: string;
-  avatar_url?: string;
+  /**
+   * Not returned by the feed endpoints (STUDENT_API_PAYLOADS §41) — build a
+   * display name from `display_name` / `firstname` / `lastname` instead. Only
+   * present on search results.
+   */
+  name?: string;
+  avatar_url?: string | null;
   // Optional extended fields from API
   firstname?: string;
   lastname?: string;
@@ -18,6 +29,8 @@ export interface PostAuthor {
 export interface FeedPost {
   id: number;
   uuid?: string;
+  /** Not documented; used to build share links when the backend provides it. */
+  slug?: string;
   title?: string;
   content_text?: string;
   content_html?: string;
@@ -70,10 +83,23 @@ export interface PostDetail extends Omit<FeedPost, "likes"> {
   comments?: PostComment[];
 }
 
+/** Reduced commenter, as returned in `comments[].user` (STUDENT_API_PAYLOADS §44). */
+export interface PostCommentUser {
+  id: number;
+  uuid?: string;
+  firstname?: string;
+  lastname?: string;
+  avatar_url?: string | null;
+  // Not returned by the API today; kept as display-name fallbacks.
+  display_name?: string;
+  name?: string;
+}
+
 export interface PostComment {
   id: number;
   content: string;
-  user: PostAuthor;
+  /** Absent on the Comment on Post response — the created model has no `user` loaded (§46). */
+  user?: PostCommentUser;
   parent_id?: number | null;
   is_approved: boolean;
   created_at: string;

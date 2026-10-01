@@ -1,3 +1,5 @@
+import type { CoinBalance } from "./coins";
+
 export interface UserProfile {
   id: string | number;
   uuid?: string;
@@ -35,6 +37,8 @@ export interface UserProfile {
   } | null;
   level?: string;
   year_of_study?: string;
+  /** XP-tier gamification level (distinct from the academic `level`/`year_of_study`) */
+  score_level?: number;
   gpa?: number | null;
   status?: string;
   verified_at?: string | null;
@@ -53,6 +57,8 @@ export interface UserProfile {
   streak_days?: number;
   current_streak?: number;
   longest_streak?: number;
+  /** Vybe Coins (Round 5) — a second reward currency, separate from XP. */
+  coins?: CoinBalance;
   last_activity_date?: string | null;
   badges_count?: number;
   courses_enrolled?: number;

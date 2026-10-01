@@ -26,6 +26,11 @@ export interface User {
     name: string;
     code?: string;
   };
+  organization?: {
+    id: number;
+    name: string;
+    code?: string;
+  } | null;
   level?: string;
   xp_total?: number;
   streak_days?: number;
@@ -35,7 +40,6 @@ export interface User {
   avatar_url?: string;
   bio?: string;
   interests?: string[];
-  is_onboarded?: boolean;
   preferences?: Record<string, unknown>;
   social_links?: {
     linkedin?: string;
@@ -68,21 +72,23 @@ export interface ApiResponse<T = unknown> {
   request_id?: string;
 }
 
+/**
+ * The raw Laravel paginator, returned directly as `data` by every paginated
+ * endpoint (e.g. `GET /student/courses`, `GET /student/feed`) — flat fields,
+ * no `success`/`meta`/`links` wrapper.
+ */
 export interface PaginatedResponse<T = unknown> {
-  success: boolean;
+  current_page: number;
   data: T[];
-  meta?: {
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
-    from: number;
-    to: number;
-  };
-  links?: {
-    first: string | null;
-    last: string | null;
-    prev: string | null;
-    next: string | null;
-  };
+  first_page_url: string | null;
+  from: number | null;
+  last_page: number;
+  last_page_url: string | null;
+  links: Array<{ url: string | null; label: string; active: boolean }>;
+  next_page_url: string | null;
+  path: string;
+  per_page: number;
+  prev_page_url: string | null;
+  to: number | null;
+  total: number;
 }

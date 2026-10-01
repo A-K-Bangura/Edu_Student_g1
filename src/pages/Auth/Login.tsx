@@ -3,10 +3,13 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { Mail, Lock, AlertCircle, Phone, Eye, EyeOff } from "lucide-react";
 import { ApiError } from "../../utils/apiError";
-import logoMain from "../../assets/logo/univybe_logo_main.png";
-
+import { useUIStore } from "../../store/uiStore";
+import { brandIconBlack320, brandIconWhite320 } from "../../assets/brand";
+import { GuestHeader } from "../../components/layout/GuestHeader";
 
 export const Login = () => {
+  const darkMode = useUIStore((state) => state.darkMode);
+  const logo = darkMode ? brandIconWhite320 : brandIconBlack320;
   const { login, isLoading, error } = useAuth();
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
   const [email, setEmail] = useState("");
@@ -104,7 +107,7 @@ export const Login = () => {
       setEmail("");
       setPhone("");
       setPassword("");
-    } catch (err) {
+    } catch {
       // Error is handled by React Query and will be available in the error prop
       // Don't clear form fields on error - keep them so user can correct and retry
       // The error will be displayed via the error prop from useAuth
@@ -130,12 +133,19 @@ export const Login = () => {
   const errorMessage = getErrorMessage();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-12 md:pt-24">
+      <GuestHeader variant="app" />
       <div className="max-w-md w-full">
         {/* Logo */}
         <div className="flex justify-center mb-2">
           <div className="w-40 h-40 rounded-2xl flex items-center justify-center">
-            <img src={logoMain} alt="logo" className="w-40 h-40" /> 
+            <img
+              src={logo.src}
+              width={logo.width}
+              height={logo.height}
+              alt="logo"
+              className="w-40 h-40"
+            />
           </div>
         </div>
 
@@ -256,7 +266,11 @@ export const Login = () => {
                 value={loginMethod === "email" ? email : phone}
                 onChange={(e) => {
                   const value = e.target.value;
-                  loginMethod === "email" ? setEmail(value) : setPhone(value);
+                  if (loginMethod === "email") {
+                    setEmail(value);
+                  } else {
+                    setPhone(value);
+                  }
                   // Clear error when user starts typing
                   if (localError) setLocalError(null);
                 }}

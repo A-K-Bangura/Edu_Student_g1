@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Clock, ChevronRight } from "lucide-react";
+import { BookOpen, Clock, ChevronRight, Coins } from "lucide-react";
 import type { Course, Enrollment } from "../../types/dashboard";
 import { debugLog } from "../../utils/debug";
 
@@ -125,6 +125,26 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
           </h3>
           <ChevronRight className="w-5 h-5 text-gray-400 shrink-0 ml-2" />
         </div>
+
+        {course.is_paid !== undefined && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {course.is_paid ? (
+              <span className="inline-block px-3 py-1 bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 rounded-full text-xs font-medium">
+                {course.currency || "SLE"} {(course.price ?? 0).toFixed(2)}
+              </span>
+            ) : (
+              <span className="inline-block px-3 py-1 bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300 rounded-full text-xs font-medium">
+                Free
+              </span>
+            )}
+            {!!course.coin_reward && course.coin_reward > 0 && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 rounded-full text-xs font-medium">
+                <Coins className="w-3 h-3" />
+                Earn {course.coin_reward}
+              </span>
+            )}
+          </div>
+        )}
 
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
           {course.short_description || course.description}

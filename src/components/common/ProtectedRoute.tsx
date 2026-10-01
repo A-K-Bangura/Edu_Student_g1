@@ -25,10 +25,17 @@ export const ProtectedRoute = ({
   const userStr = localStorage.getItem("user") || localStorage.getItem("pending_user");
   const parsedUser = userStr ? JSON.parse(userStr) : null;
 
-  // Check if user has completed onboarding
-  const hasOnboarded =
-    parsedUser?.is_onboarded ||
-    (parsedUser?.university && parsedUser?.faculty);
+  // Check if user has completed onboarding.
+  // There is no `is_onboarded` field anywhere in the API (see
+  // docs/STUDENT_API_PAYLOADS.md) — `level` is only ever set once Complete
+  // Onboarding has run (it's `null` on a fresh OTP-verified account), so its
+  // presence is a reliable signal for both university-affiliated and
+  // organization-affiliated (UnderGrad/graduate) students alike.
+  const hasOnboarded = !!(
+    parsedUser?.firstname &&
+    parsedUser?.lastname &&
+    parsedUser?.level
+  );
 
   // For onboarding route, allow access if user has pending token (new signup flow)
   // For other routes, require full authentication

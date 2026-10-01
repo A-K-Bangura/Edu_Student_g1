@@ -3,7 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import { StatCard } from "../components/common/StatCard";
 import { CourseCard } from "../components/course/CourseCard";
-import { Trophy, Flame, BookOpen, Award, ArrowRight } from "lucide-react";
+import {
+  Trophy,
+  Flame,
+  BookOpen,
+  Award,
+  ArrowRight,
+  ArrowUpRight,
+  Coins,
+} from "lucide-react";
 import { XPCounter } from "../components/common/XPCounter";
 import { StreakIndicator } from "../components/common/StreakIndicator";
 import { getDashboard, getEnrolledCourses } from "../services/dashboard";
@@ -79,7 +87,7 @@ export const Dashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -96,7 +104,7 @@ export const Dashboard = () => {
               />
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Level {dashboard?.student?.level || 1}
+              Level {dashboard?.student?.score_level ?? 1}
             </p>
           </div>
 
@@ -127,12 +135,37 @@ export const Dashboard = () => {
           <StatCard
             title="Badges"
             value={
-              dashboard?.stats?.badges_earned || dashboard?.badges?.length || 0
+              dashboard?.stats?.badges_earned ||
+              dashboard?.badges?.filter((b) => b.has_badge).length ||
+              0
             }
             icon={Award}
             color="bg-gradient-to-br from-amber-500 to-blue-violet-500"
             subtitle="Achievements unlocked"
           />
+          <button
+            onClick={() => navigate("/wallet")}
+            className="relative text-left bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+          >
+            <ArrowUpRight
+              strokeWidth={3}
+              className="absolute bottom-3 right-3 w-6 h-6 text-gray-500 dark:text-gray-400"
+            />
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Vybe Coins
+              </p>
+              <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-2 rounded-lg">
+                <Coins className="w-5 h-5 text-white" />
+              </div>
+            </div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+              {(dashboard?.student?.coins?.available ?? 0).toLocaleString()}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Manage wallet
+            </p>
+          </button>
         </div>
 
         {/* Continue Learning */}
@@ -224,7 +257,7 @@ export const Dashboard = () => {
         )}
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <button
             onClick={() => navigate("/leaderboard")}
             className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 text-left"
@@ -247,6 +280,18 @@ export const Dashboard = () => {
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               See your badges and accomplishments
+            </p>
+          </button>
+          <button
+            onClick={() => navigate("/wallet")}
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700 text-left"
+          >
+            <Coins className="w-8 h-8 text-amber-500 mb-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Manage Vybe Coins
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              View your balance, history, and exchange for Leones
             </p>
           </button>
         </div>

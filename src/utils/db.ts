@@ -1,4 +1,5 @@
 import { openDB, type IDBPDatabase } from "idb";
+import { isAxiosError } from "axios";
 
 export interface OfflineAction {
   id: string;
@@ -9,6 +10,36 @@ export interface OfflineAction {
   timestamp: number;
   retryCount: number;
 }
+
+/**
+ * Thrown by a service function instead of returning/throwing normally when
+ * a write action couldn't reach the server and was queued locally instead.
+ * Callers should catch this specifically to show a "saved, will sync later"
+ * state rather than a hard error.
+ */
+export class OfflineQueuedError extends Error {
+  constructor(message = "Saved offline — will sync when you're back online.") {
+    super(message);
+    this.name = "OfflineQueuedError";
+    Object.setPrototypeOf(this, OfflineQueuedError.prototype);
+  }
+}
+
+/** True for a request that never reached the server (offline, DNS/timeout) — false for a real 4xx/5xx from the backend. */
+export const isNetworkError = (error: unknown): boolean =>
+  isAxiosError(error) && !error.response;
+
+/**
+ * Queue a write action locally and throw OfflineQueuedError. Call this from
+ * a service function's offline/network-error branch instead of duplicating
+ * the addOfflineAction + throw pairing at every call site.
+ */
+export const queueOfflineAction = async (
+  action: Omit<OfflineAction, "id" | "timestamp" | "retryCount">
+): Promise<never> => {
+  await addOfflineAction(action);
+  throw new OfflineQueuedError();
+};
 
 const DB_NAME = "EduLiftDB";
 const DB_VERSION = 1;
@@ -58,6 +89,18 @@ export const getOfflineActions = async (): Promise<OfflineAction[]> => {
 export const removeOfflineAction = async (id: string): Promise<void> => {
   const db = await initDB();
   await db.delete(STORE_ACTIONS, id);
+};
+
+/** Increment and persist an action's retry count after a failed sync attempt; returns the new count. */
+export const bumpOfflineActionRetryCount = async (
+  id: string
+): Promise<number> => {
+  const db = await initDB();
+  const action = (await db.get(STORE_ACTIONS, id)) as OfflineAction | undefined;
+  if (!action) return 0;
+  const retryCount = (action.retryCount ?? 0) + 1;
+  await db.put(STORE_ACTIONS, { ...action, retryCount });
+  return retryCount;
 };
 
 export const clearOfflineActions = async (): Promise<void> => {

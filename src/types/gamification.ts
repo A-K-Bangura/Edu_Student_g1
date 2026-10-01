@@ -3,6 +3,8 @@ export interface XPStats {
   total_xp: number;
   xp_by_action?: Record<string, string>;
   recent_xp?: number;
+  /** XP-tier gamification level — only present on the Gamification Dashboard's xp_stats */
+  score_level?: number;
   // Legacy fields for backward compatibility
   total?: number;
   level?: number;
@@ -25,29 +27,19 @@ export interface StreakStats {
   next_milestone?: number;
 }
 
-// Badge
+// Badge catalog entry (earned + unearned), as returned by Get Gamification Dashboard / Get Badges
 export interface Badge {
-  id: number;
-  name: string;
-  description: string;
-  icon_url: string;
-  earned_at?: string;
-}
-
-// Badge with details
-export interface BadgeDetail {
-  id: number;
-  badge_id: number;
   badge: {
     id: number;
     name: string;
-    description: string;
-    icon_url: string;
-    category: string;
+    description?: string;
+    icon_url: string | null;
+    category?: string;
     rarity: string;
   };
-  earned_at: string;
+  has_badge: boolean;
   progress: number;
+  awarded_at: string | null;
 }
 
 // Leaderboard Position
@@ -69,7 +61,7 @@ export interface LeaderboardPosition {
   department?: number;
 }
 
-// Leaderboard Entry
+// Leaderboard Entry (for the legacy /gamification/leaderboards-derived UI shape)
 export interface LeaderboardEntry {
   rank: number;
   student_id: number;
@@ -78,41 +70,45 @@ export interface LeaderboardEntry {
   badges_count: number;
 }
 
-// Leaderboard Positions
-export interface LeaderboardPositions {
-  overall: LeaderboardEntry[];
-  university: LeaderboardEntry[];
-  faculty: LeaderboardEntry[];
-  department: LeaderboardEntry[];
-  user_position: LeaderboardPosition;
+// GET /student/gamification/leaderboards entry
+export interface GamificationLeaderboardEntry {
+  rank: number;
+  student: {
+    id: number;
+    firstname: string;
+    lastname: string;
+    avatar_url?: string | null;
+  };
+  xp_total: number;
 }
 
-// Leaderboard Position Detail
-export interface LeaderboardPositionDetail {
-  overall: {
-    position: number;
-    total_users: number;
-    percentile: number;
+// GET /student/gamification/leaderboards response (data)
+export interface GamificationLeaderboard {
+  leaderboard: GamificationLeaderboardEntry[];
+  stats: {
+    total_students: number;
+    total_xp: number;
+    average_xp: number;
+    top_student: { id: number; name: string } | null;
   };
-  university?: {
-    position: number;
-    total_users: number;
-  };
-  faculty?: {
-    position: number;
-    total_users: number;
-  };
-  department?: {
-    position: number;
-    total_users: number;
-  };
+  period: "all" | "week" | "month" | "year";
+  type: "global" | "university" | "course";
 }
 
-// Recent Achievement
-export interface RecentAchievement {
-  badge_name: string;
+// Personal achievement / recently-earned badge — shared shape used by
+// Gamification Dashboard's recent_achievements and Get Achievements
+export interface PersonalAchievement {
+  id: number;
+  name: string;
+  description: string;
+  icon_url: string | null;
+  category: string;
+  rarity: string;
   earned_at: string;
 }
+
+/** @deprecated use PersonalAchievement */
+export type RecentAchievement = PersonalAchievement;
 
 // Gamification Dashboard
 export interface GamificationDashboard {
@@ -120,114 +116,75 @@ export interface GamificationDashboard {
   streak_stats: StreakStats;
   badges: Badge[];
   leaderboard_position: LeaderboardPosition;
-  recent_achievements: RecentAchievement[];
+  /** The student's own recently-earned badges (not a global feed) */
+  recent_achievements: PersonalAchievement[];
 }
 
-// Badge List
-export interface BadgeList {
-  badges: BadgeDetail[];
-  total_earned: number;
-  total_available: number;
-}
+// Badge List — the entire badge catalog (earned + unearned); no summary counts are returned
+export type BadgeList = Badge[];
 
-// Streak Milestone
+// Streak milestone buckets, as returned by Get Streaks
 export interface StreakMilestone {
   days: number;
-  achieved: boolean;
-  achieved_at?: string;
+  label: string;
 }
 
-// Streak Activity
-export interface StreakActivity {
-  date: string;
-  active: boolean;
+export interface UpcomingStreakMilestone extends StreakMilestone {
+  days_remaining: number;
 }
 
-// Streak Data
+export interface StreakMilestones {
+  achieved: StreakMilestone[];
+  upcoming: UpcomingStreakMilestone[];
+}
+
+// Streak Data — everything is nested under streak_stats/milestones
 export interface StreakData {
-  current_streak: number;
-  longest_streak: number;
-  streak_start_date: string;
-  next_milestone: number;
-  milestones: StreakMilestone[];
-  recent_activity: StreakActivity[];
+  streak_stats: StreakStats;
+  milestones: StreakMilestones;
 }
 
 // XP History Entry
 export interface XPHistoryEntry {
-  id: number;
-  xp_amount: number;
-  xp_type: "awarded" | "deducted";
-  source: string;
-  description: string;
-  metadata?: Record<string, unknown>;
+  action_type: string;
+  xp_change: number;
+  reason: string;
   created_at: string;
 }
 
-// XP History
+// XP History — response key is `xp_history`, no total/total_awarded/total_deducted
 export interface XPHistory {
-  history: XPHistoryEntry[];
-  total: number;
-  total_awarded: number;
-  total_deducted: number;
+  xp_history: XPHistoryEntry[];
 }
 
-// Achievement Requirement
-export interface AchievementRequirement {
-  current?: number;
-  [key: string]: number | undefined;
-}
-
-// Achievement
-export interface Achievement {
-  id: number;
-  name: string;
-  description: string;
-  icon_url: string;
-  category: string;
-  rarity: string;
-  earned: boolean;
-  earned_at?: string;
-  progress: number;
-  requirement?: AchievementRequirement;
-}
-
-// Achievement List
+// Achievement List — Get Achievements only ever returns the achievements array
 export interface AchievementList {
-  achievements: Achievement[];
-  earned_count: number;
-  total_count: number;
+  achievements: PersonalAchievement[];
 }
 
 // Check Badges Response
 export interface CheckBadgesResponse {
-  new_badges: Array<{
+  awarded_badges: Array<{
     id: number;
     name: string;
     description: string;
+    icon_url?: string | null;
   }>;
-  checked: boolean;
+  count: number;
 }
 
 // Gamification Stats
 export interface GamificationStats {
-  xp: {
-    total: number;
-    level: number;
-    xp_to_next_level: number;
+  xp_stats: {
+    total_xp: number;
+    xp_by_action: Record<string, string | number>;
+    recent_xp: string | number;
   };
-  badges: {
-    earned: number;
-    total: number;
-    percentage: number;
-  };
-  streaks: {
-    current: number;
-    longest: number;
-  };
-  leaderboard: {
-    overall_position: number;
-    percentile: number;
+  streak_stats: StreakStats;
+  badge_stats: {
+    total_badges: number;
+    earned_badges: number;
+    completion_percentage: number;
   };
 }
 

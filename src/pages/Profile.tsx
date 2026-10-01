@@ -18,6 +18,8 @@ import {
   Phone,
   Calendar,
   Link as LinkIcon,
+  Coins,
+  ArrowUpRight,
 } from "lucide-react";
 import { getUserProfile, updateProfile } from "../services/profile";
 import { uploadAvatar } from "../services/upload";
@@ -161,9 +163,12 @@ export const Profile = () => {
         faculty_id: profile.faculty?.id,
         department_id: profile.department?.id,
         student_id: profile.student_id || "",
-        year_of_study: profile.year_of_study
-          ? parseInt(profile.year_of_study)
-          : undefined,
+        // profile.level/year_of_study hold the raw academic level string
+        // (e.g. "300"), not a literal year — convert to a 1-10 year number.
+        year_of_study:
+          profile.level && /^\d+$/.test(profile.level)
+            ? parseInt(profile.level, 10) / 100
+            : undefined,
         social_links: profile.social_links || {},
       });
     }
@@ -407,8 +412,13 @@ export const Profile = () => {
                         : `• ${profile.department}`)}
                   </p>
                 )}
-                {profile.year_of_study && (
-                  <p>Year of Study: {profile.year_of_study}</p>
+                {profile.level && (
+                  <p>
+                    Level:{" "}
+                    {/^\d+$/.test(profile.level)
+                      ? `Year ${parseInt(profile.level, 10) / 100}`
+                      : profile.level}
+                  </p>
                 )}
                 {profile.profile_completion !== undefined && (
                   <p>Profile Completion: {profile.profile_completion}%</p>
@@ -417,11 +427,9 @@ export const Profile = () => {
             </div>
             <div className="text-center md:text-right">
               <div className="text-white text-5xl md:text-6xl font-bold">
-                {gamificationData?.xp_stats?.total_xp
-                  ? Math.floor(gamificationData.xp_stats.total_xp / 100)
-                  : profile.xp_total
-                  ? Math.floor(profile.xp_total / 100)
-                  : 0}
+                {gamificationData?.xp_stats?.score_level ??
+                  profile.score_level ??
+                  0}
               </div>
               <div className="text-white text-opacity-80">Level</div>
             </div>
@@ -556,6 +564,25 @@ export const Profile = () => {
                   {profile.stats?.study_time_hours?.toFixed(1) || "0.0"}h
                 </div>
               </div>
+
+              <button
+                onClick={() => navigate("/wallet")}
+                className="relative text-left bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+              >
+                <ArrowUpRight
+                  strokeWidth={3}
+                  className="absolute bottom-3 right-3 w-6 h-6 text-gray-500 dark:text-gray-400"
+                />
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                    Vybe Coins
+                  </span>
+                  <Coins className="w-8 h-8 text-amber-500" />
+                </div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {(profile.coins?.available ?? 0).toLocaleString()}
+                </div>
+              </button>
             </div>
 
             {/* Recent Activity */}
@@ -684,56 +711,63 @@ export const Profile = () => {
           <div className="space-y-6">
             {/* Badges Section */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
-                Earned Badges ({gamificationData?.badges?.length || 0})
-              </h2>
-              {gamificationData?.badges &&
-              gamificationData.badges.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {gamificationData.badges.map((badge) => (
-                    <div
-                      key={badge.id}
-                      className="flex flex-col items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                      title={badge.description}
-                    >
-                      {badge.icon_url ? (
-                        <img
-                          src={badge.icon_url}
-                          alt={badge.name}
-                          className="w-16 h-16 rounded-full mb-3 object-cover"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 bg-linear-to-br from-amber-500 to-rose-500 rounded-full flex items-center justify-center mb-3">
-                          <Award className="w-8 h-8 text-white" />
-                        </div>
-                      )}
-                      <p className="font-semibold text-sm text-gray-900 dark:text-white text-center">
-                        {badge.name}
-                      </p>
-                      {badge.earned_at && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 text-center">
-                          {formatRelativeTime(new Date(badge.earned_at))}
+              {(() => {
+                const earnedBadges = (gamificationData?.badges || []).filter(
+                  (entry) => entry.has_badge
+                );
+                return (
+                  <>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
+                      Earned Badges ({earnedBadges.length})
+                    </h2>
+                    {earnedBadges.length > 0 ? (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {earnedBadges.map((entry) => (
+                          <div
+                            key={entry.badge.id}
+                            className="flex flex-col items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                            title={entry.badge.description}
+                          >
+                            {entry.badge.icon_url ? (
+                              <img
+                                src={entry.badge.icon_url}
+                                alt={entry.badge.name}
+                                className="w-16 h-16 rounded-full mb-3 object-cover"
+                              />
+                            ) : (
+                              <div className="w-16 h-16 bg-linear-to-br from-amber-500 to-rose-500 rounded-full flex items-center justify-center mb-3">
+                                <Award className="w-8 h-8 text-white" />
+                              </div>
+                            )}
+                            <p className="font-semibold text-sm text-gray-900 dark:text-white text-center">
+                              {entry.badge.name}
+                            </p>
+                            {entry.awarded_at && (
+                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 text-center">
+                                {formatRelativeTime(new Date(entry.awarded_at))}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <Award className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600 dark:text-gray-400">
+                          No badges earned yet. Keep learning to earn your
+                          first badge!
                         </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Award className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400">
-                    No badges earned yet. Keep learning to earn your first
-                    badge!
-                  </p>
-                </div>
-              )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Achievements Section */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
-                Achievements ({achievementsData?.earned_count || 0} /{" "}
-                {achievementsData?.total_count || 0})
+                Achievements ({achievementsData?.achievements?.length || 0})
               </h2>
               {achievementsData?.achievements &&
               achievementsData.achievements.length > 0 ? (
@@ -741,11 +775,7 @@ export const Profile = () => {
                   {achievementsData.achievements.map((achievement) => (
                     <div
                       key={achievement.id}
-                      className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-colors ${
-                        achievement.earned
-                          ? "bg-amber-50 dark:bg-amber-900/20 border-amber-500"
-                          : "bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
-                      }`}
+                      className="flex items-center gap-4 p-4 rounded-lg border-2 transition-colors bg-amber-50 dark:bg-amber-900/20 border-amber-500"
                     >
                       {achievement.icon_url ? (
                         <img
@@ -763,23 +793,13 @@ export const Profile = () => {
                           <p className="font-semibold text-gray-900 dark:text-white">
                             {achievement.name}
                           </p>
-                          {achievement.earned && (
-                            <span className="text-xs bg-amber-500 text-white px-2 py-1 rounded">
-                              Earned
-                            </span>
-                          )}
+                          <span className="text-xs bg-amber-500 text-white px-2 py-1 rounded">
+                            Earned
+                          </span>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                           {achievement.description}
                         </p>
-                        {!achievement.earned && achievement.progress < 100 && (
-                          <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                            <div
-                              className="bg-amber-500 h-2 rounded-full transition-all"
-                              style={{ width: `${achievement.progress}%` }}
-                            />
-                          </div>
-                        )}
                         {achievement.earned_at && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             Earned{" "}

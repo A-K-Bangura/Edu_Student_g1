@@ -1,11 +1,13 @@
-// API Response Entry Structure
-export interface LeaderboardApiEntry {
+// GET /student/leaderboard, /student/leaderboard/{university,faculty,department,organization,course} raw entry
+export interface ScopedLeaderboardApiEntry {
   rank: number;
   student: {
     id: number;
     name: string;
     avatar_url?: string;
     university?: string;
+    faculty?: string;
+    department?: string;
   };
   xp_total: number;
   period: string;
@@ -85,13 +87,16 @@ export interface DepartmentLeaderboard {
   };
 }
 
-export interface AchievementLeaderboard {
+export interface OrganizationLeaderboard {
   leaderboard: LeaderboardEntry[];
   user_position?: LeaderboardUserPosition;
   total_users: number;
   stats?: LeaderboardStats;
   period?: string;
-  achievement_type?: string;
+  organization: {
+    id: number;
+    name: string;
+  };
 }
 
 // Legacy types for backward compatibility
