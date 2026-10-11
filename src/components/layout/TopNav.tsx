@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { Home, BookOpen, Trophy, User, MessageSquare } from "lucide-react";
+import { Home, BookOpen, Library, User, MessageSquare } from "lucide-react";
 import { useUIStore } from "../../store/uiStore";
+import { useFeedTabStore } from "../../store/feedTabStore";
 import { isAuthenticated } from "../../services/auth";
 import {
   brandIconBlack160,
@@ -12,6 +13,7 @@ import { GuestHeader } from "./GuestHeader";
 
 export const TopNav = () => {
   const darkMode = useUIStore((state) => state.darkMode);
+  const lastVisitedFeedTab = useFeedTabStore((state) => state.lastVisitedFeedTab);
   const authenticated = isAuthenticated();
   const logo = darkMode ? brandIconWhite160 : brandIconBlack160;
   const wordmark = darkMode ? brandWordWhite : brandWordBlack;
@@ -29,9 +31,11 @@ export const TopNav = () => {
 
   const navItems = [
     { path: "/dashboard", icon: Home, label: "Home" },
-    { path: "/feed", icon: MessageSquare, label: "Feed" },
+    // Reopens whichever of Feed/Opportunities/Gigs was last visited this
+    // session — see src/store/feedTabStore.ts and docs/DECISIONS.md.
+    { path: lastVisitedFeedTab, key: "/feed", icon: MessageSquare, label: "Feed" },
     { path: "/courses", icon: BookOpen, label: "Courses" },
-    { path: "/leaderboard", icon: Trophy, label: "Leaderboard" },
+    { path: "/resources", icon: Library, label: "Resources" },
     { path: "/profile", icon: User, label: "Profile" },
   ];
 
@@ -63,7 +67,7 @@ export const TopNav = () => {
           <div className="flex-1 flex items-center justify-center gap-8">
             {navItems.map((item) => (
               <Link
-                key={item.path}
+                key={item.key ?? item.path}
                 to={item.path}
                 className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-azure-500 dark:hover:text-azure-400 transition-colors"
               >

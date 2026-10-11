@@ -1,4 +1,5 @@
 import type { CoinBalance } from "./coins";
+import type { GigReputation } from "./gig";
 
 export interface UserProfile {
   id: string | number;
@@ -59,6 +60,8 @@ export interface UserProfile {
   longest_streak?: number;
   /** Vybe Coins (Round 5) — a second reward currency, separate from XP. */
   coins?: CoinBalance;
+  /** Gigs (Round 9) — additive; ratings received as a worker and/or as a gig creator. */
+  gig_reputation?: GigReputation;
   last_activity_date?: string | null;
   badges_count?: number;
   courses_enrolled?: number;

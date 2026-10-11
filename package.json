@@ -14,7 +14,9 @@
     "icons:generate": "node scripts/generate-pwa-icons.mjs",
     "assets": "node scripts/optimize-assets.mjs",
     "assets:landing": "node scripts/optimize-assets.mjs landing",
-    "assets:brand": "node scripts/optimize-assets.mjs brand"
+    "assets:brand": "node scripts/optimize-assets.mjs brand",
+    "assets:journey": "node scripts/optimize-assets.mjs journey",
+    "assets:player": "node scripts/optimize-assets.mjs player"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.16",

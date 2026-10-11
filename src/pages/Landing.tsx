@@ -3,6 +3,7 @@ import { FeatureBand } from "../components/landing/FeatureBand";
 import {
   ConceptScene,
   CoinsScene,
+  GigsScene,
   LearningScene,
   OpportunitiesScene,
   PracticalScene,
@@ -25,6 +26,7 @@ const scenes: Record<FeatureSectionId, ReactNode> = {
   coins: <CoinsScene />,
   resources: <ResourcesScene />,
   opportunities: <OpportunitiesScene />,
+  gigs: <GigsScene />,
 };
 
 /**

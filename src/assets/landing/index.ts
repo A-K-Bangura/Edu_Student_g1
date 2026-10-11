@@ -14,7 +14,10 @@ import mascotCoolBust from "./mascot-cool-bust.webp";
 import mascotPractical from "./mascot-practical.webp";
 import mascotCoins from "./mascot-coins.webp";
 import mascotOpportunities from "./mascot-opportunities.webp";
+import mascotGigs from "./mascot-gigs.webp";
 import coin from "./coin.webp";
+import mascotMail from "./mascot-mail.webp";
+import mascotSecure from "./mascot-secure.webp";
 import floatSpark from "./float-spark.webp";
 import floatCap from "./float-cap.webp";
 import floatHeadset from "./float-headset.webp";
@@ -42,7 +45,10 @@ export const landingImages: Record<string, LandingImage> = {
   "mascot-practical": { src: mascotPractical, width: 620, height: 900 },
   "mascot-coins": { src: mascotCoins, width: 700, height: 884 },
   "mascot-opportunities": { src: mascotOpportunities, width: 658, height: 900 },
+  "mascot-gigs": { src: mascotGigs, width: 700, height: 720 },
   "coin": { src: coin, width: 256, height: 271 },
+  "mascot-mail": { src: mascotMail, width: 488, height: 720 },
+  "mascot-secure": { src: mascotSecure, width: 477, height: 720 },
   "float-spark": { src: floatSpark, width: 220, height: 346 },
   "float-cap": { src: floatCap, width: 280, height: 184 },
   "float-headset": { src: floatHeadset, width: 240, height: 280 },

@@ -39,9 +39,36 @@ export function formatRelativeTime(date: Date): string {
 }
 
 /**
+ * Format a date as a short calendar date (e.g., "Nov 27, 2026") — for plain
+ * dates and deadlines, where "2 hours ago"-style relative time doesn't fit.
+ */
+export function formatDate(date: Date): string {
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/**
  * Format percentage
  */
 export function formatPercent(value: number, total: number): string {
   if (total === 0) return "0%";
   return `${Math.round((value / total) * 100)}%`;
+}
+
+/**
+ * Format a byte count as a readable file size (e.g., "2.4 MB")
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unitIndex]}`;
 }

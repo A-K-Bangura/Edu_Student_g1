@@ -9,6 +9,7 @@ import type {
   PaymentInfo,
 } from "../types/course";
 import type { CoinsAwarded } from "../types/coins";
+import type { RoadmapCompletedEvent } from "../types/roadmap";
 import { isOnline, isNetworkError, queueOfflineAction } from "../utils/db";
 
 // Get all courses with filters
@@ -214,6 +215,8 @@ export const updateCourseProgress = async (
   course_completed: boolean;
   /** Only present when this request completes a paid course with a coin reward — see docs/STUDENT_API_PAYLOADS.md §17. */
   coins_awarded?: CoinsAwarded;
+  /** Only present when this request just finished a roadmap (one course can finish several); see docs/STUDENT_API_PAYLOADS.md "Finishing a roadmap". */
+  roadmaps_completed?: RoadmapCompletedEvent[];
 }> => {
   const url = `/student/courses/${courseId}/progress`;
   const actionType = data.lesson_id !== undefined ? "lesson_complete" : "quiz_complete";
@@ -228,6 +231,7 @@ export const updateCourseProgress = async (
         progress: CourseProgress;
         course_completed: boolean;
         coins_awarded?: CoinsAwarded;
+        roadmaps_completed?: RoadmapCompletedEvent[];
       }>
     >(url, data);
 

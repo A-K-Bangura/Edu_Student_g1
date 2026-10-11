@@ -21,6 +21,12 @@ if (typeof window.matchMedia !== "function") {
     }) as MediaQueryList;
 }
 
+// jsdom doesn't implement scrollIntoView (used by the roadmap journey to jump
+// to a stage / the current course).
+if (typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 // `globals` is off in vitest.config.ts, so React Testing Library can't
 // register its own auto-cleanup — unmount rendered trees between tests.
 afterEach(() => {

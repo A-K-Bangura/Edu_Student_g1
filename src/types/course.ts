@@ -1,3 +1,5 @@
+import type { CourseRoadmapRef } from "./roadmap";
+
 export interface CourseFilters {
   university_id?: number;
   faculty_id?: number;
@@ -112,6 +114,12 @@ export interface CourseDetail {
   coin_reward?: number;
   /** Computed by the backend from local data only (no Monime call) — drives the enroll button. */
   enrollment_state?: EnrollmentState;
+  /**
+   * Roadmaps (Round 6), Course Details only: the published roadmaps this course
+   * is part of and its place in each. `[]` for a standalone course. Informational:
+   * a roadmap never gates the course.
+   */
+  roadmaps?: CourseRoadmapRef[];
   creator?: Instructor;
   university?: {
     id: number;

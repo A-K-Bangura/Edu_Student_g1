@@ -3,20 +3,16 @@ import { Link, NavLink } from "react-router-dom";
 import { Menu, Moon, Sun, X } from "lucide-react";
 import { isAuthenticated } from "../../services/auth";
 import { useUIStore } from "../../store/uiStore";
+import { useFeedTabStore } from "../../store/feedTabStore";
 import { LandingButton } from "../landing/LandingButton";
 import { LandingImg } from "../landing/LandingImg";
 import { pickImage } from "../landing/landingAssets";
 import {
   COURSES_ROUTE,
   LOGIN_ROUTE,
+  RESOURCES_ROUTE,
   SIGNUP_ROUTE,
 } from "../landing/landingSections";
-
-// Only routes that exist in the app today (see App.tsx): public courses/feed.
-const navLinks = [
-  { to: COURSES_ROUTE, label: "Courses" },
-  { to: "/feed", label: "Feed" },
-];
 
 interface GuestHeaderProps {
   /**
@@ -43,6 +39,15 @@ export const GuestHeader = ({ variant = "landing" }: GuestHeaderProps) => {
   const darkMode = useUIStore((state) => state.darkMode);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Reopens whichever of Feed/Opportunities/Gigs was last visited this
+  // session (defaults to "/feed") — see src/store/feedTabStore.ts.
+  const lastVisitedFeedTab = useFeedTabStore((state) => state.lastVisitedFeedTab);
+  // Only routes that exist in the app today (see App.tsx): public courses/feed/resources.
+  const navLinks = [
+    { to: COURSES_ROUTE, label: "Courses" },
+    { to: lastVisitedFeedTab, label: "Feed" },
+    { to: RESOURCES_ROUTE, label: "Resources" },
+  ];
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);

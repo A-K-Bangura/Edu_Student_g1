@@ -92,3 +92,17 @@ export interface PaginatedResponse<T = unknown> {
   to: number | null;
   total: number;
 }
+
+/**
+ * Pagination block of the `{ data: [...], meta }` endpoints (coins, roadmaps):
+ * `meta` sits at the top level of the envelope, a sibling of `data`. Distinct
+ * from `PaginatedResponse<T>` above, which is the raw Laravel paginator.
+ */
+export interface PageMeta {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  from: number | null;
+  to: number | null;
+}

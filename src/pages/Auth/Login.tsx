@@ -3,13 +3,9 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { Mail, Lock, AlertCircle, Phone, Eye, EyeOff } from "lucide-react";
 import { ApiError } from "../../utils/apiError";
-import { useUIStore } from "../../store/uiStore";
-import { brandIconBlack320, brandIconWhite320 } from "../../assets/brand";
-import { GuestHeader } from "../../components/layout/GuestHeader";
+import { AuthLayout } from "../../components/auth/AuthLayout";
 
 export const Login = () => {
-  const darkMode = useUIStore((state) => state.darkMode);
-  const logo = darkMode ? brandIconWhite320 : brandIconBlack320;
   const { login, isLoading, error } = useAuth();
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
   const [email, setEmail] = useState("");
@@ -133,227 +129,214 @@ export const Login = () => {
   const errorMessage = getErrorMessage();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-12 md:pt-24">
-      <GuestHeader variant="app" />
-      <div className="max-w-md w-full">
-        {/* Logo */}
-        <div className="flex justify-center mb-2">
-          <div className="w-40 h-40 rounded-2xl flex items-center justify-center">
-            <img
-              src={logo.src}
-              width={logo.width}
-              height={logo.height}
-              alt="logo"
-              className="w-40 h-40"
+    <AuthLayout
+      pose="cool"
+      message="Good to see you again! Let's pick up right where you left off."
+    >
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+        Welcome Back
+      </h1>
+      <p className="text-gray-600 dark:text-gray-400 text-center mb-8">
+        Sign in to continue your learning journey
+      </p>
+
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-800 dark:text-red-300 mb-1">
+                {error instanceof ApiError &&
+                error.code === "LOGIN_FAILED" &&
+                error.details?.details === "The selected email is invalid."
+                  ? "Email Not Found"
+                  : error instanceof ApiError &&
+                    error.code === "INVALID_CREDENTIALS"
+                  ? "Invalid Credentials"
+                  : "Login Error"}
+              </p>
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {errorMessage}
+              </p>
+              {error instanceof ApiError &&
+                error.code === "LOGIN_FAILED" &&
+                error.details?.details ===
+                  "The selected email is invalid." && (
+                  <div className="mt-3 pt-3 border-t border-red-200 dark:border-red-800">
+                    <p className="text-xs text-red-600 dark:text-red-400 mb-2">
+                      Don't have an account?
+                    </p>
+                    <Link
+                      to="/auth/signup"
+                      className="text-xs text-azure-600 dark:text-azure-400 hover:text-azure-700 dark:hover:text-azure-300 font-semibold underline"
+                    >
+                      Sign up here
+                    </Link>
+                  </div>
+                )}
+              {error instanceof ApiError &&
+                error.code === "INVALID_CREDENTIALS" && (
+                  <div className="mt-3 pt-3 border-t border-red-200 dark:border-red-800">
+                    <Link
+                      to="/auth/forgot-password"
+                      className="text-xs text-azure-600 dark:text-azure-400 hover:text-azure-700 dark:hover:text-azure-300 font-semibold underline"
+                    >
+                      Forgot your password?
+                    </Link>
+                  </div>
+                )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Login Method Toggle */}
+      <div className="mb-6 flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+        <button
+          type="button"
+          onClick={() => {
+            setLoginMethod("email");
+            setLocalError(null);
+          }}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            loginMethod === "email"
+              ? "bg-white dark:bg-gray-700 text-azure-500 shadow-sm"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+          }`}
+        >
+          Email
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setLoginMethod("phone");
+            setLocalError(null);
+          }}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            loginMethod === "phone"
+              ? "bg-white dark:bg-gray-700 text-azure-500 shadow-sm"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+          }`}
+        >
+          Phone
+        </button>
+      </div>
+
+      {/* Login Form */}
+      <form
+        ref={formRef}
+        onSubmit={handleSubmit}
+        className="space-y-6"
+        noValidate
+      >
+        {/* Email or Phone */}
+        <div>
+          <label
+            htmlFor={loginMethod === "email" ? "email-input" : "phone-input"}
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            {loginMethod === "email" ? "Email" : "Phone Number"}
+          </label>
+          <div className="relative">
+            {loginMethod === "email" ? (
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            ) : (
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            )}
+            <input
+              id={loginMethod === "email" ? "email-input" : "phone-input"}
+              type={loginMethod === "email" ? "email" : "tel"}
+              value={loginMethod === "email" ? email : phone}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (loginMethod === "email") {
+                  setEmail(value);
+                } else {
+                  setPhone(value);
+                }
+                // Clear error when user starts typing
+                if (localError) setLocalError(null);
+              }}
+              placeholder={
+                loginMethod === "email"
+                  ? "student@example.com"
+                  : "+232 76 123 4567"
+              }
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-azure-500 focus:border-transparent transition-all"
+              disabled={isLoading}
+              required
+              autoComplete={loginMethod === "email" ? "email" : "tel"}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
+              maxLength={loginMethod === "email" ? 255 : 20}
             />
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
-          Welcome Back
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 text-center mb-8">
-          Sign in to continue your learning journey
-        </p>
-
-        {/* Error Message */}
-        {errorMessage && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-red-800 dark:text-red-300 mb-1">
-                  {error instanceof ApiError &&
-                  error.code === "LOGIN_FAILED" &&
-                  error.details?.details === "The selected email is invalid."
-                    ? "Email Not Found"
-                    : error instanceof ApiError &&
-                      error.code === "INVALID_CREDENTIALS"
-                    ? "Invalid Credentials"
-                    : "Login Error"}
-                </p>
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  {errorMessage}
-                </p>
-                {error instanceof ApiError &&
-                  error.code === "LOGIN_FAILED" &&
-                  error.details?.details ===
-                    "The selected email is invalid." && (
-                    <div className="mt-3 pt-3 border-t border-red-200 dark:border-red-800">
-                      <p className="text-xs text-red-600 dark:text-red-400 mb-2">
-                        Don't have an account?
-                      </p>
-                      <Link
-                        to="/auth/signup"
-                        className="text-xs text-azure-600 dark:text-azure-400 hover:text-azure-700 dark:hover:text-azure-300 font-semibold underline"
-                      >
-                        Sign up here
-                      </Link>
-                    </div>
-                  )}
-                {error instanceof ApiError &&
-                  error.code === "INVALID_CREDENTIALS" && (
-                    <div className="mt-3 pt-3 border-t border-red-200 dark:border-red-800">
-                      <Link
-                        to="/auth/forgot-password"
-                        className="text-xs text-azure-600 dark:text-azure-400 hover:text-azure-700 dark:hover:text-azure-300 font-semibold underline"
-                      >
-                        Forgot your password?
-                      </Link>
-                    </div>
-                  )}
-              </div>
-            </div>
+        {/* Password */}
+        <div>
+          <label
+            htmlFor="password-input"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
+            Password
+          </label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              id="password-input"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                // Clear error when user starts typing
+                if (localError) setLocalError(null);
+              }}
+              placeholder="Enter your password"
+              className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-azure-500 focus:border-transparent transition-all"
+              disabled={isLoading}
+              required
+              autoComplete="current-password"
+              minLength={8}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              tabIndex={-1}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
+            </button>
           </div>
-        )}
-
-        {/* Login Method Toggle */}
-        <div className="mb-6 flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-          <button
-            type="button"
-            onClick={() => {
-              setLoginMethod("email");
-              setLocalError(null);
-            }}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              loginMethod === "email"
-                ? "bg-white dark:bg-gray-700 text-azure-500 shadow-sm"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-            }`}
-          >
-            Email
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setLoginMethod("phone");
-              setLocalError(null);
-            }}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              loginMethod === "phone"
-                ? "bg-white dark:bg-gray-700 text-azure-500 shadow-sm"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-            }`}
-          >
-            Phone
-          </button>
         </div>
 
-        {/* Login Form */}
-        <form
-          ref={formRef}
-          onSubmit={handleSubmit}
-          className="space-y-6"
-          noValidate
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg"
         >
-          {/* Email or Phone */}
-          <div>
-            <label
-              htmlFor={loginMethod === "email" ? "email-input" : "phone-input"}
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-            >
-              {loginMethod === "email" ? "Email" : "Phone Number"}
-            </label>
-            <div className="relative">
-              {loginMethod === "email" ? (
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              ) : (
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              )}
-              <input
-                id={loginMethod === "email" ? "email-input" : "phone-input"}
-                type={loginMethod === "email" ? "email" : "tel"}
-                value={loginMethod === "email" ? email : phone}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (loginMethod === "email") {
-                    setEmail(value);
-                  } else {
-                    setPhone(value);
-                  }
-                  // Clear error when user starts typing
-                  if (localError) setLocalError(null);
-                }}
-                placeholder={
-                  loginMethod === "email"
-                    ? "student@example.com"
-                    : "+232 76 123 4567"
-                }
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-azure-500 focus:border-transparent transition-all"
-                disabled={isLoading}
-                required
-                autoComplete={loginMethod === "email" ? "email" : "tel"}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck="false"
-                maxLength={loginMethod === "email" ? 255 : 20}
-              />
-            </div>
-          </div>
+          {isLoading ? "Signing in..." : "Sign In"}
+        </button>
+      </form>
 
-          {/* Password */}
-          <div>
-            <label
-              htmlFor="password-input"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-            >
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                id="password-input"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  // Clear error when user starts typing
-                  if (localError) setLocalError(null);
-                }}
-                placeholder="Enter your password"
-                className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-azure-500 focus:border-transparent transition-all"
-                disabled={isLoading}
-                required
-                autoComplete="current-password"
-                minLength={8}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                tabIndex={-1}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? (
-                  <EyeOff className="w-5 h-5" />
-                ) : (
-                  <Eye className="w-5 h-5" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg"
-          >
-            {isLoading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
-
-        {/* Sign Up Link */}
-        <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
-          Don't have an account?{" "}
-          <Link
-            to="/auth/signup"
-            className="text-azure-500 hover:text-azure-600 font-semibold"
-          >
-            Sign up
-          </Link>
-        </p>
-      </div>
-    </div>
+      {/* Sign Up Link */}
+      <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
+        Don't have an account?{" "}
+        <Link
+          to="/auth/signup"
+          className="text-azure-500 hover:text-azure-600 font-semibold"
+        >
+          Sign up
+        </Link>
+      </p>
+    </AuthLayout>
   );
 };

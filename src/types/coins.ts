@@ -1,6 +1,11 @@
 // Vybe Coins (Round 5) — a second reward currency, separate from XP.
 // See docs/STUDENT_API_PAYLOADS.md §66-69 and docs/STUDENT_FRONTEND_API_CHANGES.md Round 5.
 
+import type { PageMeta } from "./index";
+
+// Re-exported so existing `../types/coins` imports keep working; the type lives in types/index.ts.
+export type { PageMeta };
+
 export interface CoinBalance {
   available: number;
   reserved: number;
@@ -53,19 +58,6 @@ export interface CoinTransaction {
   created_at: string;
 }
 
-/**
- * This endpoint's pagination is a sibling `{data, meta}` shape, distinct from
- * `PaginatedResponse<T>` (types/index.ts), which models the raw Laravel
- * paginator used by courses/feed/enrolled-courses.
- */
-export interface PageMeta {
-  current_page: number;
-  last_page: number;
-  per_page: number;
-  total: number;
-  from: number | null;
-  to: number | null;
-}
 
 export interface CoinTransactionList {
   data: CoinTransaction[];

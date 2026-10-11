@@ -1,3 +1,5 @@
+import type { RoadmapLink } from "./roadmap";
+
 // XP Stats
 export interface XPStats {
   total_xp: number;
@@ -38,8 +40,21 @@ export interface Badge {
     rarity: string;
   };
   has_badge: boolean;
-  progress: number;
+  /**
+   * A number (0-100) for ordinary badges. Earned roadmap badges carry an object
+   * instead (`{ current, target, percentage, is_completed }`), so don't assume a number.
+   */
+  progress: number | BadgeProgressObject;
   awarded_at: string | null;
+  /** Present only on earned roadmap-completion badges (Round 6); absent on ordinary badges. */
+  roadmap?: RoadmapLink;
+}
+
+export interface BadgeProgressObject {
+  current: number;
+  target: number;
+  percentage: number;
+  is_completed: boolean;
 }
 
 // Leaderboard Position
@@ -105,6 +120,10 @@ export interface PersonalAchievement {
   category: string;
   rarity: string;
   earned_at: string;
+  /** Round 6: `roadmap_completion` for finishing a roadmap, otherwise `badge`. */
+  type?: "badge" | "roadmap_completion";
+  /** `null` unless `type` is `roadmap_completion`. */
+  roadmap?: RoadmapLink | null;
 }
 
 /** @deprecated use PersonalAchievement */

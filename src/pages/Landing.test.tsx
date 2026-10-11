@@ -34,7 +34,7 @@ describe("Landing page", () => {
     expect(hrefOf(/log in/i, hero)).toBe("/auth/login");
   });
 
-  it("shows the six feature sections in story order, then the final CTA", () => {
+  it("shows the seven feature sections in story order, then the final CTA", () => {
     renderLanding();
 
     const titles = screen
@@ -47,16 +47,17 @@ describe("Landing page", () => {
       "Learn. Complete. Earn.",
       "All the resources you need, easily accessible",
       "Discover opportunities beyond the classroom",
+      "Pick up gigs, earn on your own schedule",
       "Bring a new vibe to your student life",
     ]);
   });
 
-  it("sets the six feature titles in the Super Greatly title font", () => {
+  it("sets the seven feature titles in the Super Greatly title font", () => {
     renderLanding();
 
     const featureTitles = screen
       .getAllByRole("heading", { level: 2 })
-      .slice(0, 6);
+      .slice(0, 7);
     for (const heading of featureTitles) {
       expect(heading).toHaveClass("font-title");
     }
@@ -68,13 +69,16 @@ describe("Landing page", () => {
     const section = (title: RegExp) =>
       screen.getByRole("heading", { level: 2, name: title }).closest("section") as HTMLElement;
 
-    // Courses is a real, public route.
+    // Courses, Resources, Opportunities and Gigs are real, public routes.
     expect(hrefOf(/explore courses/i, section(/bite-sized/i))).toBe("/courses");
-    // No practical-sessions / resources / opportunities pages exist yet, so
-    // these send guests to sign-up rather than to a dead route.
+    expect(hrefOf(/browse resources/i, section(/all the resources/i))).toBe("/resources");
+    expect(hrefOf(/explore opportunities/i, section(/discover opportunities/i))).toBe(
+      "/feed/opportunities",
+    );
+    expect(hrefOf(/find gigs/i, section(/pick up gigs/i))).toBe("/feed/gigs");
+    // No practical-sessions page exists yet, so it sends guests to sign-up
+    // rather than to a dead route.
     expect(hrefOf(/discover practical sessions/i, section(/physical meetups/i))).toBe("/auth/signup");
-    expect(hrefOf(/browse resources/i, section(/all the resources/i))).toBe("/auth/signup");
-    expect(hrefOf(/explore opportunities/i, section(/discover opportunities/i))).toBe("/auth/signup");
   });
 
   it("keeps decorative scene art out of the accessibility tree", () => {

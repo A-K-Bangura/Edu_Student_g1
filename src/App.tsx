@@ -43,6 +43,40 @@ const CoursePlayer = lazy(() =>
 const Feed = lazy(() =>
   import("./pages/Feed").then((m) => ({ default: m.Feed }))
 );
+const FeedShell = lazy(() =>
+  import("./pages/FeedShell").then((m) => ({ default: m.FeedShell }))
+);
+const Opportunities = lazy(() =>
+  import("./pages/Opportunities").then((m) => ({ default: m.Opportunities }))
+);
+const OpportunityDetail = lazy(() =>
+  import("./pages/OpportunityDetail").then((m) => ({
+    default: m.OpportunityDetail,
+  }))
+);
+const Gigs = lazy(() => import("./pages/Gigs").then((m) => ({ default: m.Gigs })));
+const GigDetail = lazy(() =>
+  import("./pages/GigDetail").then((m) => ({ default: m.GigDetail }))
+);
+const GigInterests = lazy(() =>
+  import("./pages/GigInterests").then((m) => ({ default: m.GigInterests }))
+);
+const PostedGigs = lazy(() =>
+  import("./pages/PostedGigs").then((m) => ({ default: m.PostedGigs }))
+);
+const PostGigPage = lazy(() =>
+  import("./pages/PostGigPage").then((m) => ({ default: m.PostGigPage }))
+);
+const PostedGigDetail = lazy(() =>
+  import("./pages/PostedGigDetail").then((m) => ({
+    default: m.PostedGigDetail,
+  }))
+);
+const PostedGigApplicants = lazy(() =>
+  import("./pages/PostedGigApplicants").then((m) => ({
+    default: m.PostedGigApplicants,
+  }))
+);
 const EnrolledCourses = lazy(() =>
   import("./pages/EnrolledCourses").then((m) => ({
     default: m.EnrolledCourses,
@@ -53,6 +87,23 @@ const Landing = lazy(() =>
 );
 const Wallet = lazy(() =>
   import("./pages/Wallet").then((m) => ({ default: m.Wallet }))
+);
+const Roadmaps = lazy(() =>
+  import("./pages/Roadmaps").then((m) => ({ default: m.Roadmaps }))
+);
+const RoadmapJourney = lazy(() =>
+  import("./pages/RoadmapJourney").then((m) => ({ default: m.RoadmapJourney }))
+);
+const Resources = lazy(() =>
+  import("./pages/Resources").then((m) => ({ default: m.Resources }))
+);
+const ResourceDetail = lazy(() =>
+  import("./pages/ResourceDetail").then((m) => ({ default: m.ResourceDetail }))
+);
+const ResourcePurchases = lazy(() =>
+  import("./pages/ResourcePurchases").then((m) => ({
+    default: m.ResourcePurchases,
+  }))
 );
 
 // Loading fallback component
@@ -154,8 +205,82 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              {/* Public: guests can read the feed without an account */}
-              <Route path="/feed" element={<Feed />} />
+              {/* Public: guests can browse roadmaps (students also see their own progress) */}
+              <Route path="/roadmaps" element={<Roadmaps />} />
+              <Route path="/roadmaps/:roadmapId" element={<RoadmapJourney />} />
+              {/* Public: guests can browse/read resources; opening/downloading needs an account */}
+              <Route path="/resources" element={<Resources />} />
+              <Route
+                path="/resources/purchases"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <ResourcePurchases />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/resources/:resourceId" element={<ResourceDetail />} />
+              {/* Public: guests can read the feed, browse opportunities and
+                  gigs without an account. The shell owns the tab row/swipe
+                  and is the first nested layout route in this codebase — see
+                  docs/DECISIONS.md. */}
+              <Route path="/feed" element={<FeedShell />}>
+                <Route index element={<Feed />} />
+                <Route path="opportunities" element={<Opportunities />} />
+                <Route path="gigs" element={<Gigs />} />
+              </Route>
+              <Route
+                path="/feed/opportunities/:id"
+                element={<OpportunityDetail />}
+              />
+              <Route
+                path="/feed/gigs/interests"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <GigInterests />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/feed/gigs/posted"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <PostedGigs />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/feed/gigs/new"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <PostGigPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/feed/gigs/posted/:id"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <PostedGigDetail />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/feed/gigs/posted/:id/edit"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <PostGigPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/feed/gigs/posted/:id/applicants"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <PostedGigApplicants />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/feed/gigs/:id" element={<GigDetail />} />
               <Route
                 path="/leaderboard"
                 element={
