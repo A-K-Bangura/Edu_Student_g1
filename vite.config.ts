@@ -1,10 +1,19 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  define: {
+    // The `teaser` branch ships only the landing page (see src/main.tsx), so
+    // teaser mode is ON unless VITE_TEASER_MODE=false. It's a compile-time
+    // constant, not a runtime check, so a teaser build contains none of the
+    // app's page code and the service worker precaches none of it.
+    __TEASER_MODE__: JSON.stringify(
+      loadEnv(mode, process.cwd(), "VITE_").VITE_TEASER_MODE !== "false",
+    ),
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -88,4 +97,4 @@ export default defineConfig({
       },
     }),
   ],
-});
+}));
