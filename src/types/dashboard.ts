@@ -1,4 +1,6 @@
 import type { CoinBalance } from "./coins";
+import type { BadgeProgressObject } from "./gamification";
+import type { RoadmapLink } from "./roadmap";
 
 // Legacy types for backward compatibility
 export interface LegacyDashboardStats {
@@ -98,8 +100,11 @@ export interface BadgeCatalogEntry {
     rarity: string;
   };
   has_badge: boolean;
-  progress: number;
+  /** A number for ordinary badges; earned roadmap badges send an object (see types/gamification.ts). */
+  progress: number | BadgeProgressObject;
   awarded_at: string | null;
+  /** Present only on earned roadmap-completion badges. */
+  roadmap?: RoadmapLink;
 }
 
 export interface LeaderboardPosition {
@@ -188,7 +193,8 @@ export interface Course {
   estimated_quizzes_count?: number;
   learning_objectives?: string[];
   prerequisites?: string[];
-  thumbnail_url: string;
+  /** `null` when the course has no thumbnail (the API sends null, not an empty string). */
+  thumbnail_url: string | null;
   tags?: string[];
   status?: string;
   approved_by?: number;

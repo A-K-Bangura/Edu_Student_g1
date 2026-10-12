@@ -22,6 +22,10 @@ import {
 import { deriveCompletedLessonIds } from "../utils/courseProgress";
 import { requireAuthOrRedirect } from "../utils/guestGuard";
 import { GuestBanner } from "../components/common/GuestBanner";
+import { CourseCover } from "../components/course/CourseCover";
+import { CourseRoadmapLinks } from "../components/roadmap/CourseRoadmapLinks";
+import { CourseResourcesSection } from "../components/resources/CourseResourcesSection";
+import { invalidateRoadmapQueries } from "../utils/roadmapQueries";
 import { ApiError } from "../utils/apiError";
 import type { EnrollmentState } from "../types/course";
 import type { AxiosError } from "axios";
@@ -48,6 +52,8 @@ export const CourseDetailPage = () => {
     queryClient.invalidateQueries({ queryKey: ["course-detail", courseId] });
     queryClient.invalidateQueries({ queryKey: ["course-progress", courseId] });
     queryClient.invalidateQueries({ queryKey: ["enrolled-courses"] });
+    // Taking any course makes the student a participant of its roadmaps.
+    invalidateRoadmapQueries(queryClient);
   };
 
   useEffect(() => {
@@ -274,19 +280,14 @@ export const CourseDetailPage = () => {
 
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8 border border-gray-200 dark:border-gray-700">
-          {/* Thumbnail */}
-          <div className="h-64 bg-gradient-to-br from-azure-500 to-blue-violet-500 rounded-lg mb-6 overflow-hidden">
-            {course.thumbnail_url && (
-              <img
-                src={course.thumbnail_url}
-                alt={course.title}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-            )}
-          </div>
+          {/* Thumbnail (branded abstract cover when the course has none) */}
+          <CourseCover
+            title={course.title}
+            seed={course.slug || course.uuid || String(course.id)}
+            thumbnailUrl={course.thumbnail_url}
+            loading="eager"
+            className="mb-6 h-64 w-full rounded-lg"
+          />
 
           {/* Title and Meta */}
           <div className="mb-6">
@@ -391,6 +392,9 @@ export const CourseDetailPage = () => {
             </button>
           )}
         </div>
+
+        {/* Roadmaps this course is part of (informational: never gates the course) */}
+        <CourseRoadmapLinks roadmaps={course.roadmaps} />
 
         {/* Course Structure */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 border border-gray-200 dark:border-gray-700 mb-8">
@@ -523,6 +527,8 @@ export const CourseDetailPage = () => {
             </p>
           )}
         </div>
+
+        <CourseResourcesSection courseId={course.id} />
       </div>
     </PageShell>
   );

@@ -1,7 +1,10 @@
+import type { KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Clock, ChevronRight, Coins } from "lucide-react";
+import { BookOpen, Clock, ChevronRight, Coins, GraduationCap } from "lucide-react";
 import type { Course, Enrollment } from "../../types/dashboard";
 import { debugLog } from "../../utils/debug";
+import { formatLevel } from "../../utils/roadmap";
+import { CourseCover } from "./CourseCover";
 
 interface CourseCardProps {
   course: Course;
@@ -54,6 +57,10 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
     return 0;
   };
 
+  const lessonCount = getLessonCount();
+  const estimatedHours = getEstimatedHours();
+  const level = formatLevel(course.level);
+
   const handleClick = () => {
     const hasSavedSpot = Boolean(
       enrollment?.last_module_id && enrollment?.last_lesson_id
@@ -92,94 +99,117 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
     });
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleClick();
+    }
+  };
+
   return (
     <div
+      role="link"
+      tabIndex={0}
+      aria-label={course.title}
       onClick={handleClick}
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer overflow-hidden border border-gray-200 dark:border-gray-700"
+      onKeyDown={handleKeyDown}
+      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-xl focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-azure-500 motion-reduce:transition-none motion-reduce:hover:translate-y-0 dark:border-gray-700 dark:bg-gray-800"
     >
-      {/* Thumbnail */}
-      <div className="relative h-40 bg-linear-to-br from-azure-500 to-blue-violet-500">
-        <img
-          src={course.thumbnail_url || "/placeholder-course.jpg"}
-          alt={course.title}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
+      {/* Cover */}
+      <div className="relative h-40 shrink-0 overflow-hidden">
+        <CourseCover
+          title={course.title}
+          seed={course.slug || course.uuid || String(course.id)}
+          thumbnailUrl={course.thumbnail_url}
+          className="h-full w-full transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
         />
-        {isEnrolled && progressPercent > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-700">
-            <div
-              className="h-full bg-azure-500 transition-all duration-500"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-2">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
-            {course.title}
-          </h3>
-          <ChevronRight className="w-5 h-5 text-gray-400 shrink-0 ml-2" />
-        </div>
 
         {course.is_paid !== undefined && (
-          <div className="mb-2 flex flex-wrap gap-2">
+          <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
             {course.is_paid ? (
-              <span className="inline-block px-3 py-1 bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 rounded-full text-xs font-medium">
+              <span className="rounded-full bg-amber-500 px-2.5 py-1 text-xs font-bold text-gray-900 shadow-sm">
                 {course.currency || "SLE"} {(course.price ?? 0).toFixed(2)}
               </span>
             ) : (
-              <span className="inline-block px-3 py-1 bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300 rounded-full text-xs font-medium">
+              <span className="rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-azure-300 shadow-sm">
                 Free
               </span>
             )}
             {!!course.coin_reward && course.coin_reward > 0 && (
-              <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 rounded-full text-xs font-medium">
-                <Coins className="w-3 h-3" />
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-900/80 px-2.5 py-1 text-xs font-semibold text-amber-700 shadow-sm backdrop-blur-sm">
+                <Coins className="h-3 w-3" aria-hidden />
                 Earn {course.coin_reward}
               </span>
             )}
           </div>
         )}
 
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+        <span
+          aria-hidden
+          className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-gray-700 shadow-sm transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </span>
+
+        {isEnrolled && progressPercent > 0 && (
+          <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/20">
+            <div
+              className="h-full bg-green-400 transition-all duration-500"
+              style={{ width: `${Math.min(100, progressPercent)}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="flex flex-1 flex-col p-4">
+        <h3 className="mb-1.5 line-clamp-2 text-lg font-semibold leading-snug text-gray-900 dark:text-white">
+          {course.title}
+        </h3>
+
+        <p className="mb-3 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
           {course.short_description || course.description}
         </p>
 
         {/* Meta Info */}
-        {(course.meta ||
-          course.estimated_lessons_count ||
-          course.estimated_duration_hours) && (
-          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-            <div className="flex items-center gap-1">
-              <BookOpen className="w-4 h-4" />
-              <span>{getLessonCount()} lessons</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
-              <span>{getEstimatedHours()}h</span>
-            </div>
+        {(lessonCount > 0 || estimatedHours > 0 || level) && (
+          <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+            {level && (
+              <div className="flex items-center gap-1">
+                <GraduationCap className="h-4 w-4" aria-hidden />
+                <span>{level}</span>
+              </div>
+            )}
+            {lessonCount > 0 && (
+              <div className="flex items-center gap-1">
+                <BookOpen className="h-4 w-4" aria-hidden />
+                <span>{lessonCount} lessons</span>
+              </div>
+            )}
+            {estimatedHours > 0 && (
+              <div className="flex items-center gap-1">
+                <Clock className="h-4 w-4" aria-hidden />
+                <span>{estimatedHours}h</span>
+              </div>
+            )}
           </div>
         )}
 
         {/* Status Badge */}
         {isEnrolled && progressPercent > 0 && progressPercent < 100 && (
-          <div className="mt-3 inline-block px-3 py-1 bg-azure-100 dark:bg-azure-900/20 text-azure-700 dark:text-azure-300 rounded-full text-xs font-medium">
+          <div className="mt-3 inline-block self-start rounded-full bg-azure-900 px-3 py-1 text-xs font-medium text-azure-300 dark:bg-azure-100 dark:text-azure-700">
             In Progress - {Math.round(progressPercent)}%
           </div>
         )}
         {isEnrolled && progressPercent >= 100 && (
-          <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-full text-xs font-semibold">
-            <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+          <div className="mt-3 inline-flex items-center gap-2 self-start rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">
+            <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
             Completed
           </div>
         )}
         {isEnrolled && progressPercent === 0 && (
-          <div className="mt-3 inline-block px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-xs font-medium">
+          <div className="mt-3 inline-block self-start rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
             Not Started
           </div>
         )}

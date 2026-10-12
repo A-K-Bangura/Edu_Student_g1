@@ -25,12 +25,25 @@ import type {
   OnboardingDraftLevel,
 } from "../types/onboarding";
 import type { CompleteOnboardingData } from "../services/auth";
+import { MascotInline, MascotStage } from "../components/auth/MascotCompanion";
+import type { MascotPose } from "../components/common/Mascot";
 
 const steps = [
   "Personal Info",
   "Academic Level",
   "Academic Details",
   "Account Setup",
+];
+
+// Vybe's pose and line for each step, matched to what the student is doing.
+const stepMascots: Array<{ pose: MascotPose; message: string }> = [
+  { pose: "hi", message: "Hi, I'm Vybe! Tell me a little about yourself." },
+  { pose: "hat", message: "Which year are you in? I'll find courses that fit." },
+  { pose: "smart", message: "Let's find your campus, faculty and department." },
+  {
+    pose: "secure",
+    message: "Last step: pick a strong password to keep your account safe.",
+  },
 ];
 
 export const Onboarding = () => {
@@ -259,426 +272,432 @@ export const Onboarding = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-azure-500 to-blue-violet-500 rounded-2xl flex items-center justify-center shadow-lg">
-              <GraduationCap className="w-8 h-8 text-white" />
-            </div>
+      <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start lg:gap-12">
+        <MascotStage
+          pose={stepMascots[currentStep].pose}
+          message={stepMascots[currentStep].message}
+          className="lg:sticky lg:top-8"
+        />
+        <div className="mx-auto w-full max-w-2xl">
+          <MascotInline
+            pose={stepMascots[currentStep].pose}
+            message={stepMascots[currentStep].message}
+          />
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              Complete Your Profile
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Help us personalize your learning experience
+            </p>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Complete Your Profile
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Help us personalize your learning experience
-          </p>
-        </div>
 
-        {/* Progress Steps */}
-        <div className="flex justify-between mb-8">
-          {steps.map((step, index) => (
-            <div
-              key={index}
-              className={`flex-1 ${index < steps.length - 1 ? "mr-4" : ""}`}
-            >
-              <div className="flex items-center">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+          {/* Progress Steps */}
+          <div className="flex justify-between mb-8">
+            {steps.map((step, index) => (
+              <div
+                key={index}
+                className={`flex-1 ${index < steps.length - 1 ? "mr-4" : ""}`}
+              >
+                <div className="flex items-center">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                      index <= currentStep
+                        ? "bg-azure-500 text-white"
+                        : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                    }`}
+                  >
+                    {index + 1}
+                  </div>
+                  {index < steps.length - 1 && (
+                    <div
+                      className={`flex-1 h-0.5 mx-2 ${
+                        index < currentStep
+                          ? "bg-azure-500"
+                          : "bg-gray-200 dark:bg-gray-700"
+                      }`}
+                    />
+                  )}
+                </div>
+                <p
+                  className={`text-xs mt-2 text-center ${
                     index <= currentStep
-                      ? "bg-azure-500 text-white"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                      ? "text-azure-500 font-semibold"
+                      : "text-gray-500 dark:text-gray-400"
                   }`}
                 >
-                  {index + 1}
+                  {step}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Form Card */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
+            {/* Step 1: Personal Info */}
+            {currentStep === 0 && (
+              <div className="space-y-6">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                  Personal Information
+                </h2>
+
+                {/* First Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    First Name *
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={formData.firstname}
+                      onChange={(e) =>
+                        handleInputChange("firstname", e.target.value)
+                      }
+                      placeholder="Enter your first name"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
                 </div>
-                {index < steps.length - 1 && (
-                  <div
-                    className={`flex-1 h-0.5 mx-2 ${
-                      index < currentStep
-                        ? "bg-azure-500"
-                        : "bg-gray-200 dark:bg-gray-700"
-                    }`}
-                  />
+
+                {/* Last Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Last Name *
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={formData.lastname}
+                      onChange={(e) =>
+                        handleInputChange("lastname", e.target.value)
+                      }
+                      placeholder="Enter your last name"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Phone Number *
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => handleInputChange("phone", e.target.value)}
+                      placeholder="+232 76 123 4567"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Level */}
+            {currentStep === 1 && (
+              <div className="space-y-6">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                  Study Level
+                </h2>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Academic Level *
+                  </label>
+                  <div className="relative">
+                    <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <select
+                      value={formData.level}
+                      onChange={(e) => {
+                        handleInputChange("level", e.target.value);
+                        // Reset academic fields when level changes
+                        handleInputChange("university_id", null);
+                        handleInputChange("faculty_id", null);
+                        handleInputChange("department_id", null);
+                        handleInputChange("organization_id", null);
+                        handleInputChange("student_id", "");
+                      }}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
+                    >
+                      <option value="">Select your level</option>
+                      <option value="UnderGrad">Undergraduate</option>
+                      <option value="100">100 Level</option>
+                      <option value="200">200 Level</option>
+                      <option value="300">300 Level</option>
+                      <option value="400">400 Level</option>
+                      <option value="500">500 Level</option>
+                      <option value="graduate">Graduate</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: University/Organization (conditional based on level) */}
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                  Academic Information
+                </h2>
+
+                {/* For Regular Levels (100-500): Show University/Faculty/Department/Student ID */}
+                {isRegularLevel(formData.level) && (
+                  <>
+                    {/* University */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        University *
+                      </label>
+                      <div className="relative">
+                        <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <select
+                          value={formData.university_id || ""}
+                          onChange={(e) => {
+                            handleInputChange(
+                              "university_id",
+                              e.target.value ? Number(e.target.value) : null
+                            );
+                            // Reset dependent fields
+                            handleInputChange("faculty_id", null);
+                            handleInputChange("department_id", null);
+                          }}
+                          className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
+                        >
+                          <option value="">Select a university</option>
+                          {universities.map((uni) => (
+                            <option key={uni.id} value={uni.id}>
+                              {uni.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Faculty */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Faculty *
+                      </label>
+                      <div className="relative">
+                        <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <select
+                          value={formData.faculty_id || ""}
+                          onChange={(e) => {
+                            handleInputChange(
+                              "faculty_id",
+                              e.target.value ? Number(e.target.value) : null
+                            );
+                            // Reset department
+                            handleInputChange("department_id", null);
+                          }}
+                          disabled={!formData.university_id}
+                          className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="">
+                            {formData.university_id
+                              ? "Select a faculty"
+                              : "Select a university first"}
+                          </option>
+                          {faculties.map((faculty) => (
+                            <option key={faculty.id} value={faculty.id}>
+                              {faculty.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Department */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Department *
+                      </label>
+                      <div className="relative">
+                        <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <select
+                          value={formData.department_id || ""}
+                          onChange={(e) =>
+                            handleInputChange(
+                              "department_id",
+                              e.target.value ? Number(e.target.value) : null
+                            )
+                          }
+                          disabled={!formData.faculty_id}
+                          className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="">
+                            {formData.faculty_id
+                              ? "Select a department"
+                              : "Select a faculty first"}
+                          </option>
+                          {departments.map((dept) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Student ID */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Student ID
+                      </label>
+                      <div className="relative">
+                        <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={formData.student_id || ""}
+                          onChange={(e) =>
+                            handleInputChange("student_id", e.target.value)
+                          }
+                          placeholder="Enter your student ID (optional)"
+                          className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  </>
                 )}
-              </div>
-              <p
-                className={`text-xs mt-2 text-center ${
-                  index <= currentStep
-                    ? "text-azure-500 font-semibold"
-                    : "text-gray-500 dark:text-gray-400"
-                }`}
-              >
-                {step}
-              </p>
-            </div>
-          ))}
-        </div>
 
-        {/* Form Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
-          {/* Step 1: Personal Info */}
-          {currentStep === 0 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Personal Information
-              </h2>
-
-              {/* First Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  First Name *
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={formData.firstname}
-                    onChange={(e) =>
-                      handleInputChange("firstname", e.target.value)
-                    }
-                    placeholder="Enter your first name"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Last Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Last Name *
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={formData.lastname}
-                    onChange={(e) =>
-                      handleInputChange("lastname", e.target.value)
-                    }
-                    placeholder="Enter your last name"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Phone Number *
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange("phone", e.target.value)}
-                    placeholder="+232 76 123 4567"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Level */}
-          {currentStep === 1 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Study Level
-              </h2>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Academic Level *
-                </label>
-                <div className="relative">
-                  <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <select
-                    value={formData.level}
-                    onChange={(e) => {
-                      handleInputChange("level", e.target.value);
-                      // Reset academic fields when level changes
-                      handleInputChange("university_id", null);
-                      handleInputChange("faculty_id", null);
-                      handleInputChange("department_id", null);
-                      handleInputChange("organization_id", null);
-                      handleInputChange("student_id", "");
-                    }}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
-                  >
-                    <option value="">Select your level</option>
-                    <option value="UnderGrad">Undergraduate</option>
-                    <option value="100">100 Level</option>
-                    <option value="200">200 Level</option>
-                    <option value="300">300 Level</option>
-                    <option value="400">400 Level</option>
-                    <option value="500">500 Level</option>
-                    <option value="graduate">Graduate</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: University/Organization (conditional based on level) */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Academic Information
-              </h2>
-
-              {/* For Regular Levels (100-500): Show University/Faculty/Department/Student ID */}
-              {isRegularLevel(formData.level) && (
-                <>
-                  {/* University */}
+                {/* For UnderGrad/Graduate Levels: Show Organization (optional) */}
+                {isSpecialLevel(formData.level) && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      University *
+                      Organization (Optional)
                     </label>
                     <div className="relative">
                       <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <select
-                        value={formData.university_id || ""}
-                        onChange={(e) => {
-                          handleInputChange(
-                            "university_id",
-                            e.target.value ? Number(e.target.value) : null
-                          );
-                          // Reset dependent fields
-                          handleInputChange("faculty_id", null);
-                          handleInputChange("department_id", null);
-                        }}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
-                      >
-                        <option value="">Select a university</option>
-                        {universities.map((uni) => (
-                          <option key={uni.id} value={uni.id}>
-                            {uni.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Faculty */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Faculty *
-                    </label>
-                    <div className="relative">
-                      <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <select
-                        value={formData.faculty_id || ""}
-                        onChange={(e) => {
-                          handleInputChange(
-                            "faculty_id",
-                            e.target.value ? Number(e.target.value) : null
-                          );
-                          // Reset department
-                          handleInputChange("department_id", null);
-                        }}
-                        disabled={!formData.university_id}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <option value="">
-                          {formData.university_id
-                            ? "Select a faculty"
-                            : "Select a university first"}
-                        </option>
-                        {faculties.map((faculty) => (
-                          <option key={faculty.id} value={faculty.id}>
-                            {faculty.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Department */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Department *
-                    </label>
-                    <div className="relative">
-                      <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <select
-                        value={formData.department_id || ""}
+                        value={formData.organization_id || ""}
                         onChange={(e) =>
                           handleInputChange(
-                            "department_id",
+                            "organization_id",
                             e.target.value ? Number(e.target.value) : null
                           )
                         }
-                        disabled={!formData.faculty_id}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
                       >
                         <option value="">
-                          {formData.faculty_id
-                            ? "Select a department"
-                            : "Select a faculty first"}
+                          Select an organization (optional)
                         </option>
-                        {departments.map((dept) => (
-                          <option key={dept.id} value={dept.id}>
-                            {dept.name}
+                        {organizations.map((org) => (
+                          <option key={org.id} value={org.id}>
+                            {org.name}
                           </option>
                         ))}
                       </select>
                     </div>
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      You can optionally associate with an organization
+                    </p>
                   </div>
+                )}
+              </div>
+            )}
 
-                  {/* Student ID */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Student ID
-                    </label>
-                    <div className="relative">
-                      <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        value={formData.student_id || ""}
-                        onChange={(e) =>
-                          handleInputChange("student_id", e.target.value)
-                        }
-                        placeholder="Enter your student ID (optional)"
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
+            {/* Step 4: Account Setup */}
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                  Account Setup
+                </h2>
 
-              {/* For UnderGrad/Graduate Levels: Show Organization (optional) */}
-              {isSpecialLevel(formData.level) && (
+                {/* Password */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Organization (Optional)
+                    Password *
                   </label>
                   <div className="relative">
-                    <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <select
-                      value={formData.organization_id || ""}
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="password"
+                      value={formData.password || ""}
                       onChange={(e) =>
-                        handleInputChange(
-                          "organization_id",
-                          e.target.value ? Number(e.target.value) : null
-                        )
+                        handleInputChange("password", e.target.value)
                       }
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
-                    >
-                      <option value="">
-                        Select an organization (optional)
-                      </option>
-                      {organizations.map((org) => (
-                        <option key={org.id} value={org.id}>
-                          {org.name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="At least 8 characters"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                      required
+                    />
                   </div>
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    You can optionally associate with an organization
-                  </p>
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* Step 4: Account Setup */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Account Setup
-              </h2>
-
-              {/* Password */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Password *
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="password"
-                    value={formData.password || ""}
-                    onChange={(e) =>
-                      handleInputChange("password", e.target.value)
-                    }
-                    placeholder="At least 8 characters"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
-                    required
-                  />
+                {/* Confirm Password */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Confirm Password *
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="password"
+                      value={formData.password_confirmation || ""}
+                      onChange={(e) =>
+                        handleInputChange("password_confirmation", e.target.value)
+                      }
+                      placeholder="Re-enter your password"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
+            )}
 
-              {/* Confirm Password */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Confirm Password *
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="password"
-                    value={formData.password_confirmation || ""}
-                    onChange={(e) =>
-                      handleInputChange("password_confirmation", e.target.value)
-                    }
-                    placeholder="Re-enter your password"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
-                    required
-                  />
-                </div>
+            {/* Validation Message */}
+            {getValidationMessage() && (
+              <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                  {getValidationMessage()}
+                </p>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Validation Message */}
-          {getValidationMessage() && (
-            <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-              <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                {getValidationMessage()}
-              </p>
-            </div>
-          )}
+            {/* Error Message */}
+            {submitMutation.error && (
+              <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {submitMutation.error instanceof Error
+                    ? submitMutation.error.message
+                    : "An error occurred"}
+                </p>
+              </div>
+            )}
 
-          {/* Error Message */}
-          {submitMutation.error && (
-            <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {submitMutation.error instanceof Error
-                  ? submitMutation.error.message
-                  : "An error occurred"}
-              </p>
+            {/* Navigation Buttons */}
+            <div className="flex justify-between mt-8">
+              <button
+                onClick={handleBack}
+                disabled={currentStep === 0}
+                className="px-6 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleNext}
+                disabled={!validateStep() || submitMutation.isPending}
+                className="px-6 py-2 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
+              >
+                {submitMutation.isPending
+                  ? "Submitting..."
+                  : currentStep === steps.length - 1
+                  ? "Complete"
+                  : "Next"}{" "}
+                <ChevronRight className="w-5 h-5" />
+              </button>
             </div>
-          )}
-
-          {/* Navigation Buttons */}
-          <div className="flex justify-between mt-8">
-            <button
-              onClick={handleBack}
-              disabled={currentStep === 0}
-              className="px-6 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleNext}
-              disabled={!validateStep() || submitMutation.isPending}
-              className="px-6 py-2 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
-            >
-              {submitMutation.isPending
-                ? "Submitting..."
-                : currentStep === steps.length - 1
-                ? "Complete"
-                : "Next"}{" "}
-              <ChevronRight className="w-5 h-5" />
-            </button>
           </div>
         </div>
       </div>

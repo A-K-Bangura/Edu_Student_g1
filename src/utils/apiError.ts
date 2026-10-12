@@ -130,6 +130,54 @@ export class ApiError extends Error {
       case "IDEMPOTENCY_KEY_REUSED":
         return "This request doesn't match a previous attempt — please refresh and try again.";
 
+      case "RESOURCE_NOT_FOUND":
+      case "NOT_FOUND":
+        return "This resource is no longer available.";
+
+      case "STORAGE_UNAVAILABLE":
+        return "We couldn't prepare this file. No access was used. Please try again.";
+
+      case "ACCESS_PACK_UNAVAILABLE":
+        return "Buying more accesses isn't available right now.";
+
+      case "PURCHASE_IN_PROGRESS":
+        return "Your purchase is already being prepared — please wait a moment.";
+
+      case "GIG_OWN_GIG":
+        return "You can't express interest in your own gig.";
+
+      case "GIG_NOT_ACCEPTING_INTEREST": {
+        const reason = this.details?.reason;
+        if (reason === "capacity_reached") return "This gig has reached its interest limit.";
+        if (reason === "deadline_passed") return "This gig's application deadline has passed.";
+        if (reason === "manually_closed") return "This gig is no longer accepting interest.";
+        return "This gig is no longer accepting interest.";
+      }
+
+      case "GIG_CREATOR_NOT_RATEABLE":
+        return "Only gigs posted by a student can have their creator rated.";
+
+      case "GIG_NOT_WORKED_WITH":
+        return "Only a student who was marked as worked with on this gig can be rated.";
+
+      case "GIG_NOT_APPLICANT":
+        return "That student hasn't shown interest in this gig.";
+
+      case "GIG_HAS_RATINGS":
+        return "This can't be changed because a rating already exists for it.";
+
+      case "GIG_CLOSED_BY_ADMIN":
+        return "An admin closed this gig — only an admin can reopen it.";
+
+      case "GIG_INVALID_STATE":
+        return "This action isn't available for the gig's current status.";
+
+      case "GIG_DEADLINE_PASSED":
+        return "Set a new, future deadline before continuing.";
+
+      case "GIG_CAPACITY_REACHED":
+        return "Raise the applicant limit, or switch to open interest, before reopening.";
+
       default:
         return this.message || "An error occurred. Please try again.";
     }

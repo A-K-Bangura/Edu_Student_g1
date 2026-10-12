@@ -3,9 +3,11 @@ import {
   BookOpen,
   Bookmark,
   Briefcase,
+  Camera,
   Check,
   FileText,
   GraduationCap,
+  Palette,
   Presentation,
   Trophy,
   type LucideProps,
@@ -195,6 +197,38 @@ export const ResourceCard = ({ kind }: { kind: ResourceKind }) => {
         <span className="block h-1.5 w-full rounded-full bg-gray-200" />
         <span className="block h-1.5 w-4/5 rounded-full bg-gray-200" />
         <span className="block h-1.5 w-3/5 rounded-full bg-gray-200" />
+      </div>
+    </div>
+  );
+};
+
+type GigKind = "design" | "tutoring" | "photography";
+
+const gigKinds: Record<
+  GigKind,
+  { label: string; price: string; icon: ComponentType<LucideProps>; badge: string }
+> = {
+  design: { label: "Logo design", price: "Le 500", icon: Palette, badge: "bg-blue-violet-500 text-white" },
+  tutoring: { label: "Maths tutoring", price: "Negotiable", icon: GraduationCap, badge: "bg-azure-500 text-white" },
+  photography: { label: "Event photos", price: "Le 300", icon: Camera, badge: "bg-aquamarine-500 text-gray-900" },
+};
+
+export const GigCard = ({ kind }: { kind: GigKind }) => {
+  const { label, price, icon: Icon, badge } = gigKinds[kind];
+  return (
+    <div className={`${card} w-full`}>
+      <div className="flex items-center gap-2">
+        <span
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${badge}`}
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-extrabold leading-tight">{label}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+            {price}
+          </p>
+        </div>
       </div>
     </div>
   );

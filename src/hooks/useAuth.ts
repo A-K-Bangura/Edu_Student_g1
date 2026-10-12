@@ -1,16 +1,20 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import * as authService from "../services/auth";
 
 export const useAuth = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Login mutation
   const loginMutation = useMutation({
     mutationFn: authService.login,
     onSuccess: () => {
-      // Redirect based on user status
-      navigate("/dashboard");
+      // A guest sent to log in from e.g. a resource detail page (?redirect=
+      // /resources/123) returns there instead of the dashboard. Signup has
+      // no equivalent — see docs/DECISIONS.md for why that's scoped out.
+      const redirect = searchParams.get("redirect");
+      navigate(redirect || "/dashboard");
     },
     onError: (error: Error) => {
       // Don't redirect on error - let the component handle it

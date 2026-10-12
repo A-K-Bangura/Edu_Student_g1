@@ -7,11 +7,9 @@ import {
   type InfiniteData,
 } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { PageShell } from "../components/layout/PageShell";
 import {
   Heart,
   Share2,
-  Filter,
   AlertCircle,
   MessageCircle,
   User,
@@ -20,6 +18,8 @@ import {
   Coins,
   X,
 } from "lucide-react";
+import { DiscoveryToolbar } from "../components/discovery/DiscoveryToolbar";
+import { FilterSelect } from "../components/discovery/FilterSelect";
 import {
   getFeedPosts,
   toggleLikePost,
@@ -401,8 +401,7 @@ export const Feed = () => {
     },
   });
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitSearch = () => {
     if (searchQuery.trim()) {
       setIsSearchMode(true);
       setSearchOffset(0);
@@ -427,6 +426,20 @@ export const Feed = () => {
       [key]: value || undefined,
     }));
   };
+
+  const resetFeedFilters = () => {
+    setSearchQuery("");
+    setIsSearchMode(false);
+    setSearchOffset(0);
+    setFilters({ per_page: 15 });
+  };
+
+  const activeFeedFilterCount = [
+    searchQuery.trim(),
+    filters.type,
+    filters.sort_by && filters.sort_by !== "created_at",
+    filters.sort_order && filters.sort_order !== "desc",
+  ].filter(Boolean).length;
 
   // XP exchange mutation
   const exchangeXpMutation = useMutation({
@@ -531,118 +544,78 @@ export const Feed = () => {
   const isLoadingFeed = isSearchMode ? isSearchLoading : isLoadingPosts;
 
   return (
-    <PageShell>
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <GuestBanner />
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                Feed
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400">
-                Stay motivated with tips, discussions, and announcements
-              </p>
-            </div>
-            {feedTime && !feedTime.unlimited && (
-              <div className="text-right">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Remaining Time
-                </div>
-                <div className="text-lg font-semibold text-azure-500">
-                  {formatRemainingTime(feedTime.seconds)}
-                </div>
-              </div>
-            )}
+    <>
+    <div className="max-w-4xl mx-auto">
+      <GuestBanner />
+      {/* Remaining Time — the heading/subtitle above this is now owned by FeedShell */}
+      {feedTime && !feedTime.unlimited && (
+        <div className="mb-8 text-right">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Remaining Time
+          </div>
+          <div className="text-lg font-semibold text-azure-500">
+            {formatRemainingTime(feedTime.seconds)}
           </div>
         </div>
+      )}
 
-        {/* Search and Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8 border border-gray-200 dark:border-gray-700">
-          {/* Search */}
-          <form onSubmit={handleSearch} className="mb-6">
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search posts..."
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-azure-500 focus:border-transparent"
-              />
-              <button
-                type="submit"
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-azure-500 hover:bg-azure-600 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
-              >
-                Search
-              </button>
-            </div>
-          </form>
-
-          {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Type
-              </label>
-              <select
+        {/* Search and Filters — same DiscoveryToolbar used by Opportunities/Gigs */}
+        <DiscoveryToolbar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          onSearchSubmit={submitSearch}
+          searchPlaceholder="Search posts..."
+          searchLabel="Search posts"
+          primary={
+            <>
+              <FilterSelect
+                label="Type"
                 value={filters.type || ""}
-                onChange={(e) =>
-                  handleFilterChange(
-                    "type",
-                    e.target.value as PostType | undefined
-                  )
+                onChange={(value) =>
+                  handleFilterChange("type", (value || undefined) as PostType | undefined)
                 }
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
-              >
-                <option value="">All Types</option>
-                <option value="question">Questions</option>
-                <option value="announcement">Announcements</option>
-                {/* <option value="resource">Resources</option> */}
-                <option value="discussion">Discussions</option>
-                <option value="tip">Tips</option>
-                <option value="meme">Memes</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Sort By
-              </label>
-              <select
+                options={[
+                  { value: "question", label: "Questions" },
+                  { value: "announcement", label: "Announcements" },
+                  { value: "discussion", label: "Discussions" },
+                  { value: "tip", label: "Tips" },
+                  { value: "meme", label: "Memes" },
+                ]}
+                placeholder="All Types"
+              />
+              <FilterSelect
+                label="Sort By"
                 value={filters.sort_by || "created_at"}
-                onChange={(e) =>
+                onChange={(value) =>
                   handleFilterChange(
                     "sort_by",
-                    e.target.value as "created_at" | "popularity" | undefined
+                    value as "created_at" | "popularity" | undefined
                   )
                 }
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
-              >
-                <option value="created_at">Date Created</option>
-                <option value="popularity">Popularity</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Sort Order
-              </label>
-              <select
+                options={[
+                  { value: "created_at", label: "Date Created" },
+                  { value: "popularity", label: "Popularity" },
+                ]}
+                placeholder="Date Created"
+              />
+              <FilterSelect
+                label="Sort Order"
                 value={filters.sort_order || "desc"}
-                onChange={(e) =>
-                  handleFilterChange(
-                    "sort_order",
-                    e.target.value as "asc" | "desc" | undefined
-                  )
+                onChange={(value) =>
+                  handleFilterChange("sort_order", value as "asc" | "desc" | undefined)
                 }
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500"
-              >
-                <option value="desc">Descending</option>
-                <option value="asc">Ascending</option>
-              </select>
-            </div>
-          </div>
-        </div>
+                options={[
+                  { value: "desc", label: "Descending" },
+                  { value: "asc", label: "Ascending" },
+                ]}
+                placeholder="Descending"
+              />
+            </>
+          }
+          activeCount={activeFeedFilterCount}
+          onReset={resetFeedFilters}
+          sheetTitle="Filter feed"
+        />
 
         {/* Search Results Header */}
         {isSearchMode && searchQuery && (
@@ -1134,6 +1107,6 @@ export const Feed = () => {
           </div>
         </div>
       )}
-    </PageShell>
+    </>
   );
 };

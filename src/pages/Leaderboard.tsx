@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageShell } from "../components/layout/PageShell";
+import { RatingStars } from "../components/gigs/RatingStars";
 import {
   Trophy,
   Medal,
@@ -534,6 +535,54 @@ export const Leaderboard = () => {
                             </div>
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Gig reputation (Round 9) — additive on the same getStudentProfile() call */}
+                    {selectedStudent.gig_reputation && (
+                      <div className="mb-6 text-center md:text-left">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                          Gig reputation
+                        </h4>
+                        {selectedStudent.gig_reputation.rating_count > 0 ? (
+                          <>
+                            <div className="flex items-center gap-3 mb-3 justify-center md:justify-start">
+                              <RatingStars value={selectedStudent.gig_reputation.average_rating} />
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                {selectedStudent.gig_reputation.average_rating?.toFixed(1)} ·{" "}
+                                {selectedStudent.gig_reputation.rating_count} rating
+                                {selectedStudent.gig_reputation.rating_count === 1 ? "" : "s"}
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              {selectedStudent.gig_reputation.reviews.slice(0, 3).map((review) => (
+                                <div
+                                  key={review.id}
+                                  className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3 text-left"
+                                >
+                                  <div className="flex items-center justify-between gap-2 mb-1">
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                                      {review.reviewer.name}
+                                    </span>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                      as {review.as}
+                                    </span>
+                                  </div>
+                                  <RatingStars value={review.rating} size="sm" />
+                                  {review.review && (
+                                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                      {review.review}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            No ratings yet.
+                          </p>
+                        )}
                       </div>
                     )}
 

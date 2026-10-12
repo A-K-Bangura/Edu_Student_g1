@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
+import { RatingStars } from "../components/gigs/RatingStars";
 import {
   User,
   Award,
@@ -20,6 +21,7 @@ import {
   Link as LinkIcon,
   Coins,
   ArrowUpRight,
+  ChevronRight,
 } from "lucide-react";
 import { getUserProfile, updateProfile } from "../services/profile";
 import { uploadAvatar } from "../services/upload";
@@ -585,6 +587,73 @@ export const Profile = () => {
               </button>
             </div>
 
+            {/* Gig reputation (Round 9) — additive on the same getUserProfile() call, no new query */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                Gig reputation
+              </h2>
+              {profile.gig_reputation && profile.gig_reputation.rating_count > 0 ? (
+                <>
+                  <div className="flex items-center gap-3 mb-4">
+                    <RatingStars value={profile.gig_reputation.average_rating} />
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {profile.gig_reputation.average_rating?.toFixed(1)} ·{" "}
+                      {profile.gig_reputation.rating_count} rating
+                      {profile.gig_reputation.rating_count === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {profile.gig_reputation.reviews.slice(0, 3).map((review) => (
+                      <div
+                        key={review.id}
+                        className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {review.reviewer.name}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            as {review.as}
+                          </span>
+                        </div>
+                        <RatingStars value={review.rating} size="sm" />
+                        {review.review && (
+                          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                            {review.review}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  No ratings yet. Ratings may come from gigs you worked on or gigs you posted.
+                </p>
+              )}
+            </div>
+
+            {/* Quick links */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+              <Link
+                to="/leaderboard"
+                className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <div className="bg-gradient-to-br from-azure-500 to-blue-violet-500 p-2.5 rounded-lg shrink-0">
+                  <Trophy className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    Leaderboard
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    See student rankings
+                  </p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
+              </Link>
+            </div>
+
             {/* Recent Activity */}
             {(() => {
               const activities =
@@ -742,6 +811,16 @@ export const Profile = () => {
                             <p className="font-semibold text-sm text-gray-900 dark:text-white text-center">
                               {entry.badge.name}
                             </p>
+                            {entry.roadmap && (
+                              <span className="own-links mt-1">
+                                <Link
+                                  to={`/roadmaps/${entry.roadmap.slug}`}
+                                  className="text-xs font-semibold text-azure-500 underline dark:text-azure-700"
+                                >
+                                  View roadmap
+                                </Link>
+                              </span>
+                            )}
                             {entry.awarded_at && (
                               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 text-center">
                                 {formatRelativeTime(new Date(entry.awarded_at))}
@@ -800,6 +879,17 @@ export const Profile = () => {
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                           {achievement.description}
                         </p>
+                        {achievement.type === "roadmap_completion" &&
+                          achievement.roadmap && (
+                            <span className="own-links">
+                              <Link
+                                to={`/roadmaps/${achievement.roadmap.slug}`}
+                                className="text-xs font-semibold text-azure-500 underline dark:text-azure-700"
+                              >
+                                View roadmap
+                              </Link>
+                            </span>
+                          )}
                         {achievement.earned_at && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             Earned{" "}

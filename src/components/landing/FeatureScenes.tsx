@@ -5,6 +5,7 @@ import {
   CampusCard,
   CoinToken,
   CompletionCard,
+  GigCard,
   IconChip,
   LessonCard,
   OpportunityCard,
@@ -178,6 +179,36 @@ export const ResourcesScene = () => (
       float
     >
       <BookmarkChip />
+    </SceneItem>
+  </SceneStage>
+);
+
+export const GigsScene = () => (
+  <SceneStage blob="bg-white/25">
+    <SceneMascot
+      image={pickImage("mascot-gigs", "mascot-cool")}
+      alt="Vybe holding a fan of Leone banknotes, pointing at them with a grin"
+      heightPct={88}
+    />
+    <SceneItem
+      className="left-[0%] top-[6%] w-[46%] -rotate-3 sm:w-[34%]"
+      from={{ x: 80, y: 20, r: 10, s: 0.85 }}
+    >
+      <GigCard kind="design" />
+    </SceneItem>
+    <SceneItem
+      className="right-[0%] top-[14%] w-[44%] rotate-3 sm:w-[32%]"
+      from={{ x: -70, y: 30, r: -10, s: 0.8 }}
+      float
+      floatAmp={-5}
+    >
+      <GigCard kind="photography" />
+    </SceneItem>
+    <SceneItem
+      className="left-[4%] bottom-[22%] w-[42%] -rotate-2 sm:w-[30%]"
+      from={{ x: 40, y: 40, r: -8, s: 0.8 }}
+    >
+      <GigCard kind="tutoring" />
     </SceneItem>
   </SceneStage>
 );

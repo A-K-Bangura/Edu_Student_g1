@@ -5,14 +5,18 @@ export const SIGNUP_ROUTE = "/auth/signup";
 export const LOGIN_ROUTE = "/auth/login";
 export const COURSES_ROUTE = "/courses";
 
-// The product has no practical-sessions, resources or opportunities pages
-// yet (App.tsx has no such routes). Those CTAs keep their designed labels but
-// send guests to sign-up — the app's existing guest strategy for
-// account-gated features (see utils/guestGuard.ts) — instead of a dead link.
-// Point these at the real routes once those pages exist.
+// The product has no practical-sessions page yet (App.tsx has no such
+// route). That CTA keeps its designed label but sends guests to sign-up —
+// the app's existing guest strategy for account-gated features (see
+// utils/guestGuard.ts) — instead of a dead link. Point it at the real route
+// once that page exists.
 export const PRACTICAL_SESSIONS_ROUTE = SIGNUP_ROUTE;
-export const RESOURCES_ROUTE = SIGNUP_ROUTE;
-export const OPPORTUNITIES_ROUTE = SIGNUP_ROUTE;
+// Resources (Round 7, 2026-10-06) and Opportunities/Gigs (Rounds 8-9,
+// 2026-10-09) are real, public, guest-browsable routes — their CTAs go
+// straight there, not through sign-up.
+export const RESOURCES_ROUTE = "/resources";
+export const OPPORTUNITIES_ROUTE = "/feed/opportunities";
+export const GIGS_ROUTE = "/feed/gigs";
 
 export type FeatureSectionId =
   | "concept"
@@ -20,7 +24,8 @@ export type FeatureSectionId =
   | "practical"
   | "coins"
   | "resources"
-  | "opportunities";
+  | "opportunities"
+  | "gigs";
 
 export interface FeatureSectionConfig {
   id: FeatureSectionId;
@@ -37,7 +42,7 @@ export interface FeatureSectionConfig {
 }
 
 // Order follows the page story:
-// identity -> learning -> doing -> earning -> resources -> opportunities.
+// identity -> learning -> doing -> earning -> resources -> opportunities -> gigs.
 export const featureSections: FeatureSectionConfig[] = [
   {
     id: "concept",
@@ -106,5 +111,17 @@ export const featureSections: FeatureSectionConfig[] = [
     cta: { label: "Explore opportunities", href: OPPORTUNITIES_ROUTE },
     visualSide: "right",
     animationVariant: "opportunities",
+  },
+  {
+    id: "gigs",
+    eyebrow: "Gigs",
+    title: "Pick up gigs, earn on your own schedule",
+    description:
+      "Find small jobs posted by fellow students, tutors, and the platform — logo design, tutoring, event photography, and more. Earn money, build experience, or post a gig of your own.",
+    background: "bg-aquamarine-500",
+    tone: "dark",
+    cta: { label: "Find gigs", href: GIGS_ROUTE },
+    visualSide: "left",
+    animationVariant: "gigs",
   },
 ];

@@ -3,8 +3,6 @@
 
 import brandIconBlack160Src from "./brand-icon-black-160.webp";
 import brandIconWhite160Src from "./brand-icon-white-160.webp";
-import brandIconBlack320Src from "./brand-icon-black-320.webp";
-import brandIconWhite320Src from "./brand-icon-white-320.webp";
 import brandWordBlackSrc from "./brand-word-black.webp";
 import brandWordWhiteSrc from "./brand-word-white.webp";
 
@@ -16,7 +14,5 @@ export interface BrandImage {
 
 export const brandIconBlack160: BrandImage = { src: brandIconBlack160Src, width: 160, height: 160 };
 export const brandIconWhite160: BrandImage = { src: brandIconWhite160Src, width: 160, height: 160 };
-export const brandIconBlack320: BrandImage = { src: brandIconBlack320Src, width: 320, height: 320 };
-export const brandIconWhite320: BrandImage = { src: brandIconWhite320Src, width: 320, height: 320 };
 export const brandWordBlack: BrandImage = { src: brandWordBlackSrc, width: 420, height: 162 };
 export const brandWordWhite: BrandImage = { src: brandWordWhiteSrc, width: 420, height: 162 };

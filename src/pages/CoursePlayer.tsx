@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageShell } from "../components/layout/PageShell";
 import { OutlineSidebar } from "../components/course/OutlineSidebar";
@@ -17,6 +17,7 @@ import {
   AlertCircle,
   WifiOff,
   Coins,
+  Award,
 } from "lucide-react";
 import { getLessonDetail, SequentialAccessError } from "../services/lessons";
 import {
@@ -39,6 +40,8 @@ import type { CourseProgress } from "../types/course";
 import type { Quiz, QuizSubmission, QuizResult } from "../types/quiz";
 import type { UserProfile } from "../types/profile";
 import type { CoinsAwarded } from "../types/coins";
+import type { RoadmapCompletedEvent } from "../types/roadmap";
+import { invalidateRoadmapQueries } from "../utils/roadmapQueries";
 import {
   DEFAULT_INSPO_TYPE,
   getRandomInspirationMessage,
@@ -84,6 +87,7 @@ export const CoursePlayer = () => {
     progress: CourseProgress;
     courseCompleted: boolean;
     coinsAwarded?: CoinsAwarded;
+    roadmapsCompleted?: RoadmapCompletedEvent[];
   } | null>(null);
   const [inspirationMessage, setInspirationMessage] = useState("");
 
@@ -631,6 +635,7 @@ export const CoursePlayer = () => {
         queryClient.invalidateQueries({
           queryKey: ["course-progress", courseId],
         });
+        invalidateRoadmapQueries(queryClient);
 
         setQuizStates((prev) => ({
           ...prev,
@@ -939,7 +944,7 @@ export const CoursePlayer = () => {
     setLessonCompletionError(null);
 
     try {
-      const { progress, course_completed, coins_awarded } =
+      const { progress, course_completed, coins_awarded, roadmaps_completed } =
         await updateCourseProgress(courseId, {
           lesson_id: lessonContent.id,
           completed: true,
@@ -947,6 +952,8 @@ export const CoursePlayer = () => {
       queryClient.invalidateQueries({
         queryKey: ["course-progress", courseId],
       });
+      // Roadmap progress and the current course derive from course completion.
+      invalidateRoadmapQueries(queryClient);
       if (coins_awarded) {
         queryClient.invalidateQueries({ queryKey: ["wallet"] });
       }
@@ -955,6 +962,7 @@ export const CoursePlayer = () => {
         progress,
         courseCompleted: course_completed,
         coinsAwarded: coins_awarded,
+        roadmapsCompleted: roadmaps_completed,
       });
       setLessonCompletionStatus("success");
       setShowCompletionModal(true);
@@ -1492,6 +1500,28 @@ export const CoursePlayer = () => {
                 </p>
               </div>
             )}
+            {/* Shown only when this very request finished a roadmap. */}
+            {lessonCompletion?.roadmapsCompleted?.map((roadmap) => (
+              <div
+                key={roadmap.id}
+                className="own-links mb-6 rounded-xl border border-blue-violet-600 bg-blue-violet-900 px-4 py-4 text-center dark:border-blue-violet-300 dark:bg-blue-violet-100"
+              >
+                <Award className="mx-auto mb-1 h-8 w-8 text-blue-violet-400 dark:text-blue-violet-700" />
+                <p className="text-lg font-bold text-blue-violet-200 dark:text-blue-violet-800">
+                  Roadmap complete!
+                </p>
+                <p className="mt-0.5 text-sm text-gray-700 dark:text-gray-300">
+                  You finished {roadmap.title} and earned the{" "}
+                  <strong>{roadmap.badge.name}</strong> badge.
+                </p>
+                <Link
+                  to={`/roadmaps/${roadmap.uuid}`}
+                  className="mt-2 inline-block text-sm font-semibold text-blue-violet-400 underline dark:text-blue-violet-700"
+                >
+                  View roadmap
+                </Link>
+              </div>
+            ))}
             <div className="grid grid-cols-1 gap-2 mb-4">
               <div className=" rounded-xl text-center">
                 <p className="text-[.75rem] uppercase ml-2 inline-block tracking-wide text-gray-500 dark:text-gray-400">

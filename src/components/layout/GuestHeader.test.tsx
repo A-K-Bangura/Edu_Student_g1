@@ -123,12 +123,12 @@ describe("TopNav", () => {
     expect(container.querySelector('[aria-hidden="true"]')).toHaveClass("h-[65px]");
   });
 
-  it("leaves the signed-in app nav unchanged", () => {
+  it("shows the signed-in app nav (Resources in place of Leaderboard)", () => {
     asStudent();
     renderAt("/dashboard", <TopNav />);
 
     expect(screen.queryByRole("banner")).not.toBeInTheDocument();
-    for (const name of ["Home", "Feed", "Courses", "Leaderboard", "Profile"]) {
+    for (const name of ["Home", "Feed", "Courses", "Resources", "Profile"]) {
       expect(screen.getByRole("link", { name })).toBeInTheDocument();
     }
     expect(screen.queryByRole("link", { name: "Get started" })).not.toBeInTheDocument();

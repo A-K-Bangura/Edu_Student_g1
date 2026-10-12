@@ -8,6 +8,7 @@ export type FeatureAnimationVariant =
   | "coins"
   | "resources"
   | "opportunities"
+  | "gigs"
   | "cta";
 
 interface VariantTiming {
@@ -28,6 +29,7 @@ const TIMING: Record<FeatureAnimationVariant, VariantTiming> = {
   coins: { mascotDuration: 0.8, itemStart: 0.4, itemStagger: 0.12, itemEase: "back.out(1.1)" },
   resources: { mascotDuration: 0.8, itemStart: 0.3, itemStagger: 0.12, itemEase: "power3.out" },
   opportunities: { mascotDuration: 0.8, itemStart: 0.35, itemStagger: 0.2, itemEase: "power2.out" },
+  gigs: { mascotDuration: 0.8, itemStart: 0.35, itemStagger: 0.15, itemEase: "back.out(1.1)" },
   cta: { mascotDuration: 0.8, itemStart: 0.2, itemStagger: 0.1, itemEase: "power2.out" },
 };
 
