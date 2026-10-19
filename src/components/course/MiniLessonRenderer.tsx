@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactElement } from "react";
+import { useMemo, useRef, useState, type ReactElement } from "react";
 import katex from "katex";
 import type {
   MiniLesson,
@@ -15,6 +15,8 @@ import {
   Info,
   AlertTriangle,
   ExternalLink,
+  Copy,
+  Check,
 } from "lucide-react";
 
 interface MiniLessonRendererProps {
@@ -70,13 +72,32 @@ const renderTextContent = (content: string) => {
   ));
 };
 
+const KNOWN_TEXT_TYPES: readonly MiniLessonTextType[] = [
+  "plain",
+  "remember",
+  "simply_put",
+  "important",
+  "formula",
+  "link",
+  "prompt",
+];
+
+// Be forgiving: a `text_type` this portal doesn't recognise (yet) renders as
+// plain text rather than an empty block (see docs/STUDENT_FRONTEND_API_CHANGES.md Round 11).
+const normalizeTextType = (
+  textType: MiniLessonTextType | null | undefined
+): MiniLessonTextType =>
+  textType && (KNOWN_TEXT_TYPES as string[]).includes(textType)
+    ? textType
+    : "plain";
+
 const TextBlock = ({
   block,
 }: {
   block: MiniLessonBlock;
 }): ReactElement | null => {
   const content = block.content || "";
-  const textType = (block.text_type || "plain") as MiniLessonTextType;
+  const textType = normalizeTextType(block.text_type);
 
   if (!content.trim()) {
     return null;
@@ -125,6 +146,14 @@ const TextBlock = ({
     }
   }
 
+  if (textType === "link") {
+    return <LinkBlock content={content} mediaMetadata={block.media_metadata} />;
+  }
+
+  if (textType === "prompt") {
+    return <PromptBlock content={content} />;
+  }
+
   const styles: Record<MiniLessonTextType, string> = {
     remember:
       "bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-800",
@@ -134,6 +163,8 @@ const TextBlock = ({
       "bg-rose-50 border border-rose-200 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200 dark:border-rose-800",
     formula: "",
     plain: "", // handled earlier
+    link: "", // handled earlier
+    prompt: "", // handled earlier
   } as const;
 
   const iconMap: Record<MiniLessonTextType, ReactElement> = {
@@ -142,6 +173,8 @@ const TextBlock = ({
     important: <AlertTriangle className="w-4 h-4" />,
     formula: <FileText className="w-4 h-4 hidden" />,
     plain: <FileText className="w-4 h-4 hidden" />,
+    link: <FileText className="w-4 h-4 hidden" />,
+    prompt: <FileText className="w-4 h-4 hidden" />,
   } as const;
 
   const titles: Record<MiniLessonTextType, string> = {
@@ -150,6 +183,8 @@ const TextBlock = ({
     important: "Important",
     formula: "Formula",
     plain: " ",
+    link: " ",
+    prompt: " ",
   } as const;
 
   return (
@@ -166,6 +201,120 @@ const TextBlock = ({
     </div>
   );
 };
+
+const getLinkLabel = (
+  mediaMetadata: Record<string, unknown> | null | undefined
+): string | null => {
+  const label = mediaMetadata?.label;
+  return typeof label === "string" && label.trim() ? label : null;
+};
+
+const LinkBlock = ({
+  content,
+  mediaMetadata,
+}: {
+  content: string;
+  mediaMetadata?: Record<string, unknown> | null;
+}): ReactElement => {
+  const label = getLinkLabel(mediaMetadata);
+  let host = content;
+  try {
+    host = new URL(content).host || content;
+  } catch {
+    // Not a parseable URL — fall back to showing the raw content as-is.
+  }
+
+  return (
+    <div className="own-links bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <a
+          href={content}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 font-semibold text-azure-500 hover:text-azure-600 break-all dark:text-azure-700 dark:hover:text-azure-800"
+        >
+          <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+          {label || content}
+        </a>
+        {label && (
+          <span className="text-xs text-gray-500 dark:text-gray-400 break-all">
+            {host}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PromptBlock = ({ content }: { content: string }): ReactElement => {
+  const [copied, setCopied] = useState(false);
+  const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const showCopied = () => {
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopy = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(content);
+        showCopied();
+        return;
+      }
+    } catch {
+      // Fall through to the select-all fallback below.
+    }
+
+    // Clipboard API unavailable (e.g. a non-HTTPS page) — select the hidden
+    // textarea's text so the student can copy it with Ctrl/Cmd+C.
+    const textarea = fallbackTextareaRef.current;
+    if (textarea) {
+      textarea.focus();
+      textarea.select();
+      try {
+        document.execCommand("copy");
+        showCopied();
+      } catch {
+        // Nothing more we can do — the text is at least selected for the student to copy manually.
+      }
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          Prompt
+        </span>
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-azure-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-azure-600"
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5" aria-hidden />
+          ) : (
+            <Copy className="h-3.5 w-3.5" aria-hidden />
+          )}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 p-4 font-mono text-sm text-gray-800 dark:bg-gray-900/40 dark:text-gray-100">
+        {content}
+      </pre>
+      <textarea
+        ref={fallbackTextareaRef}
+        value={content}
+        readOnly
+        aria-hidden
+        tabIndex={-1}
+        className="sr-only"
+      />
+    </div>
+  );
+};
+
 const ImageBlock = ({
   block,
   onPreview,

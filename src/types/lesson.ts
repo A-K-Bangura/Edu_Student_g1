@@ -19,7 +19,11 @@ export type MiniLessonTextType =
   | "remember"
   | "simply_put"
   | "important"
-  | "formula";
+  | "formula"
+  /** Round 11: a single http(s) URL, rendered as a clickable link. */
+  | "link"
+  /** Round 11: text meant to be copied into an AI tool, rendered in a copy-friendly box. */
+  | "prompt";
 
 export interface MiniLessonBlock {
   id: number;

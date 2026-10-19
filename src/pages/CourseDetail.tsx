@@ -20,6 +20,7 @@ import {
   getEnrollmentStatus,
 } from "../services/courses";
 import { deriveCompletedLessonIds } from "../utils/courseProgress";
+import { formatLevel } from "../utils/roadmap";
 import { requireAuthOrRedirect } from "../utils/guestGuard";
 import { GuestBanner } from "../components/common/GuestBanner";
 import { CourseCover } from "../components/course/CourseCover";
@@ -299,10 +300,12 @@ export const CourseDetailPage = () => {
             </p>
 
             <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
-              <div className="flex items-center gap-2">
-                <GraduationCap className="w-5 h-5" />
-                <span>{course.level} Level</span>
-              </div>
+              {formatLevel(course.level) && (
+                <div className="flex items-center gap-2">
+                  <GraduationCap className="w-5 h-5" />
+                  <span>{formatLevel(course.level)}</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <BookOpen className="w-5 h-5" />
                 <span>{courseStats.lessonsCount} Lessons</span>

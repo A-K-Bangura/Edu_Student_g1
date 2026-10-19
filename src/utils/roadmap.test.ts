@@ -123,6 +123,7 @@ describe("roadmap labels", () => {
     expect(formatLevel("200")).toBe("200 Level");
     expect(formatLevel("UnderGrad")).toBe("Undergraduate");
     expect(formatLevel("graduate")).toBe("Graduate");
+    expect(formatLevel("general")).toBe("General");
     expect(formatLevel(null)).toBeNull();
   });
 

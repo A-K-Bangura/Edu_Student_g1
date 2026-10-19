@@ -1,10 +1,11 @@
 import type { Roadmap, RoadmapCourseItem } from "../types/roadmap";
 
-/** "200" -> "200 Level", "UnderGrad" -> "Undergraduate", "graduate" -> "Graduate". */
+/** "200" -> "200 Level", "UnderGrad" -> "Undergraduate", "graduate" -> "Graduate", "general" -> "General". */
 export const formatLevel = (level: string | null | undefined): string | null => {
   if (!level) return null;
   if (level === "UnderGrad") return "Undergraduate";
   if (level === "graduate") return "Graduate";
+  if (level === "general") return "General";
   return /^\d+$/.test(level) ? `${level} Level` : level;
 };
 
