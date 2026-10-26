@@ -1,6 +1,7 @@
 import type { CoinBalance } from "./coins";
 import type { BadgeProgressObject } from "./gamification";
 import type { RoadmapLink } from "./roadmap";
+import type { AcademicModule } from "./academicModule";
 
 // Legacy types for backward compatibility
 export interface LegacyDashboardStats {
@@ -256,6 +257,12 @@ export interface Course {
       title: string;
     };
   };
+  /**
+   * Round 12 (2026-10-27): the official university module this course is
+   * tagged with, or `null` for most courses. Optional — absent from course
+   * cards inside roadmaps and from the dashboard's enrolled-course list.
+   */
+  academic_module?: AcademicModule | null;
 }
 
 // Enrollment type matching the API response

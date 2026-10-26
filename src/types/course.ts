@@ -1,4 +1,5 @@
 import type { CourseRoadmapRef } from "./roadmap";
+import type { AcademicModule } from "./academicModule";
 
 export interface CourseFilters {
   university_id?: number;
@@ -7,6 +8,8 @@ export interface CourseFilters {
   organization_id?: number;
   level?: string;
   search?: string;
+  /** Round 12: only courses tagged with this official university module. */
+  academic_module_id?: number;
   sort_by?: "created_at" | "title";
   sort_order?: "asc" | "desc";
   page?: number;
@@ -120,6 +123,8 @@ export interface CourseDetail {
    * a roadmap never gates the course.
    */
   roadmaps?: CourseRoadmapRef[];
+  /** Round 12: the official university module this course is tagged with, or `null`. */
+  academic_module?: AcademicModule | null;
   creator?: Instructor;
   university?: {
     id: number;

@@ -55,6 +55,8 @@ export const searchCourses = async (
   filters?: {
     level?: string;
     status?: "published" | "draft";
+    /** Round 12: only courses tagged with this official university module. */
+    academic_module_id?: number;
     tags?: string[];
     limit?: number;
     offset?: number;
@@ -63,6 +65,8 @@ export const searchCourses = async (
   const params = new URLSearchParams();
   params.append("q", query);
   if (filters?.level) params.append("level", filters.level);
+  if (filters?.academic_module_id)
+    params.append("academic_module_id", filters.academic_module_id.toString());
   if (filters?.status) params.append("status", filters.status);
   if (filters?.tags) {
     filters.tags.forEach((tag) => params.append("tags[]", tag));

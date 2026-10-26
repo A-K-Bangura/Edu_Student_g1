@@ -22,6 +22,7 @@ import {
   getDepartments,
   getOrganizations,
 } from "../services/onboarding";
+import { getAcademicModules } from "../services/academicModules";
 import { GuestBanner } from "../components/common/GuestBanner";
 import type { CourseFilters } from "../types/course";
 import type { Course } from "../types/dashboard";
@@ -157,6 +158,23 @@ export const Courses = () => {
     enabled: !!filters.university_id && !!filters.faculty_id,
   });
 
+  // Academic modules (Round 12) — scoped to the most specific of the
+  // selected department/faculty/university, per docs/ACADEMIC_MODULES_API.md
+  // (passing more than one of these at once isn't a documented combination).
+  const moduleScope = filters.department_id
+    ? { department_id: filters.department_id }
+    : filters.faculty_id
+      ? { faculty_id: filters.faculty_id }
+      : filters.university_id
+        ? { university_id: filters.university_id }
+        : null;
+  const { data: academicModulesData } = useQuery({
+    queryKey: ["academic-modules", moduleScope],
+    queryFn: () => getAcademicModules(moduleScope!),
+    enabled: !!moduleScope,
+  });
+  const academicModules = academicModulesData?.data || [];
+
   // Regular courses query (when not searching)
   const { data: coursesData, isLoading } = useQuery({
     queryKey: ["courses", filters],
@@ -166,10 +184,17 @@ export const Courses = () => {
 
   // Search courses query (when searching)
   const { data: searchResults, isLoading: isSearchLoading } = useQuery({
-    queryKey: ["search-courses", searchQuery, filters.level, searchOffset],
+    queryKey: [
+      "search-courses",
+      searchQuery,
+      filters.level,
+      filters.academic_module_id,
+      searchOffset,
+    ],
     queryFn: () =>
       searchCourses(searchQuery, {
         level: filters.level,
+        academic_module_id: filters.academic_module_id,
         limit: filters.per_page || 20,
         offset: searchOffset,
       }),
@@ -191,6 +216,7 @@ export const Courses = () => {
       tags: item.tags,
       thumbnail_url: item.thumbnail_url || null, // Use actual thumbnail URL from search results
       enrolled_students_count: item.enrollments_count,
+      academic_module: item.academic_module,
     };
   };
 
@@ -298,10 +324,17 @@ export const Courses = () => {
       if (key === "university_id") {
         newFilters.faculty_id = undefined;
         newFilters.department_id = undefined;
+        newFilters.academic_module_id = undefined;
       }
       // When faculty changes, reset department
       if (key === "faculty_id") {
         newFilters.department_id = undefined;
+        newFilters.academic_module_id = undefined;
+      }
+      // The module picker's own options depend on department/faculty, so a
+      // direct department change can also invalidate a previously picked one.
+      if (key === "department_id") {
+        newFilters.academic_module_id = undefined;
       }
 
       return newFilters;
@@ -348,11 +381,13 @@ export const Courses = () => {
     (filters.faculty_id !== defaultFacultyId ? 1 : 0) +
     (filters.department_id !== defaultDepartmentId ? 1 : 0) +
     (filters.organization_id ? 1 : 0) +
+    (filters.academic_module_id ? 1 : 0) +
     (filters.sort_by ? 1 : 0);
   const moreFiltersActive =
     filters.faculty_id !== defaultFacultyId ||
     filters.department_id !== defaultDepartmentId ||
-    !!filters.organization_id;
+    !!filters.organization_id ||
+    !!filters.academic_module_id;
 
   // Determine which courses to display
   const courses =
@@ -449,6 +484,25 @@ export const Courses = () => {
         }))}
         placeholder="All organizations"
       />
+      <FilterSelect
+        label="Module"
+        value={
+          filters.academic_module_id ? String(filters.academic_module_id) : ""
+        }
+        onChange={(value) =>
+          handleFilterChange(
+            "academic_module_id",
+            value ? Number(value) : undefined
+          )
+        }
+        options={academicModules.map((module) => ({
+          value: String(module.id),
+          label: module.label,
+        }))}
+        placeholder="All modules"
+        disabled={!moduleScope}
+        disabledHint="Choose a university first"
+      />
     </>
   );
 
@@ -534,8 +588,8 @@ export const Courses = () => {
             onSeeAll={() => seeAll("department")}
           />
         )}
-        
-{/* General — open to every student, whatever their year (Round 10) */}
+
+        {/* General — open to every student, whatever their year (Round 10) */}
         {isDiscoveryView && generalList.length > 0 && (
           <CourseSection
             id="courses-general"
@@ -567,8 +621,6 @@ export const Courses = () => {
             onSeeAll={() => seeAll("university")}
           />
         )}
-
-        
 
         {/* Explore All (Unfiltered) */}
         {isDiscoveryView && exploreList.length > 0 && (

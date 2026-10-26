@@ -164,6 +164,11 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
 
       {/* Content */}
       <div className="flex flex-1 flex-col p-4">
+        {course.academic_module && (
+          <p className="mb-1 truncate text-xs font-bold uppercase tracking-wide text-azure-500 dark:text-azure-700">
+            {course.academic_module.label}
+          </p>
+        )}
         <h3 className="mb-1.5 line-clamp-2 text-lg font-semibold leading-snug text-gray-900 dark:text-white">
           {course.title}
         </h3>
