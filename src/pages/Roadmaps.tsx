@@ -55,6 +55,7 @@ const LEVELS = [
   { value: "400", label: "400 Level" },
   { value: "500", label: "500 Level" },
   { value: "graduate", label: "Graduate" },
+  { value: "general", label: "General" },
 ];
 
 const SEMESTERS = [
@@ -149,10 +150,20 @@ export const Roadmaps = () => {
     enabled: signedIn && !isFiltering,
   });
 
+  // General roadmaps (Round 10): level is exact-match, so the level filter
+  // above never surfaces `general` roadmaps on its own — this row fetches
+  // them explicitly so every student can see them, whatever their year.
+  const generalQuery = useQuery({
+    queryKey: ["roadmaps", "general-preview", signedIn],
+    queryFn: () => getRoadmaps({ level: "general", per_page: FEATURED_COUNT }),
+    enabled: !isFiltering,
+  });
+
   const roadmaps = listQuery.data?.data ?? [];
   const meta = listQuery.data?.meta;
   const top = topQuery.data?.data;
   const mine = mineQuery.data?.data;
+  const general = generalQuery.data?.data ?? [];
 
   const recommended = useMemo(
     () => (signedIn && top ? getRecommendedRoadmaps(top, FEATURED_COUNT) : []),
@@ -336,6 +347,17 @@ export const Roadmaps = () => {
               subtitle="Every course done. Badge earned."
             />
             <RoadmapGrid roadmaps={completed} />
+          </section>
+        )}
+
+        {!isFiltering && general.length > 0 && (
+          <section aria-labelledby="rm-general" className="mb-10">
+            <SectionHeader
+              id="rm-general"
+              title="General roadmaps"
+              subtitle="Open to every student, whatever your year."
+            />
+            <RoadmapGrid roadmaps={general} />
           </section>
         )}
 

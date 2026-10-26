@@ -1,12 +1,17 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { Mail, AlertCircle, CheckCircle } from "lucide-react";
+import { Mail, AlertCircle, CheckCircle, Info } from "lucide-react";
 import { AuthLayout } from "../../components/auth/AuthLayout";
 
 export const Signup = () => {
   const { signup, isLoading, error } = useAuth();
-  const [email, setEmail] = useState("");
+  const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get("reason") === "session-expired";
+  // After an expiry, pre-fill the email they verified with so recovery is one tap.
+  const [email, setEmail] = useState(() =>
+    sessionExpired ? localStorage.getItem("signup_email") ?? "" : ""
+  );
   const [localError, setLocalError] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
 
@@ -73,6 +78,20 @@ export const Signup = () => {
       <p className="text-gray-600 dark:text-gray-400 text-center mb-8">
         Start your learning journey today
       </p>
+
+      {sessionExpired && (
+        <div
+          role="status"
+          className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-3"
+        >
+          <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-blue-700 dark:text-blue-300">
+            Your session expired before you finished setting up. Verify your
+            email again and you'll continue where you left off — your answers
+            are saved on this device.
+          </p>
+        </div>
+      )}
 
       {/* Error Message */}
       {errorMessage && (

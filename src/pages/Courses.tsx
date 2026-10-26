@@ -35,6 +35,7 @@ const LEVELS = [
   { value: "400", label: "400 Level" },
   { value: "500", label: "500 Level" },
   { value: "graduate", label: "Graduate" },
+  { value: "general", label: "General" },
 ];
 
 // One "Sort" control instead of separate sort-by / sort-order dropdowns.
@@ -59,10 +60,10 @@ export const Courses = () => {
 
   const [showAllCourses, setShowAllCourses] = useState(false);
   const [_activeGroup, setActiveGroup] = useState<
-    "department" | "faculty" | "university" | "all" | null
+    "department" | "faculty" | "university" | "general" | "all" | null
   >(null);
   const [groupMode, setGroupMode] = useState<
-    "department" | "faculty" | "university" | "all" | null
+    "department" | "faculty" | "university" | "general" | "all" | null
   >(null);
   const [filters, setFilters] = useState<CourseFilters>({
     page: 1,
@@ -82,6 +83,7 @@ export const Courses = () => {
       | "department"
       | "faculty"
       | "university"
+      | "general"
       | "all"
       | null;
     if (!group) {
@@ -113,6 +115,14 @@ export const Courses = () => {
         per_page: 20,
         level: defaultLevel,
         university_id: defaultUniversityId,
+      });
+    } else if (group === "general") {
+      // Open to every student, regardless of year/department — level is the
+      // only filter here, exact-match "general" (Round 10).
+      setFilters({
+        page: 1,
+        per_page: 20,
+        level: "general",
       });
     } else {
       // all
@@ -243,6 +253,20 @@ export const Courses = () => {
       }),
   });
 
+  // General courses (Round 10): level is exact-match, so a student's own
+  // `level` filter above never surfaces `general` courses on its own — this
+  // row fetches them explicitly so every student can see them regardless of
+  // year/department/faculty/university.
+  const { data: generalCourses } = useQuery({
+    queryKey: ["courses", "group", "general"],
+    queryFn: () =>
+      getCourses({
+        page: 1,
+        per_page: 6,
+        level: "general",
+      }),
+  });
+
   const handleSearch = () => {
     if (searchQuery.trim()) {
       setIsSearchMode(true);
@@ -341,10 +365,12 @@ export const Courses = () => {
   const facultyList = facultyCourses?.data || [];
   const universityList = universityCourses?.data || [];
   const exploreList = exploreAllCourses?.data || [];
+  const generalList = generalCourses?.data || [];
 
   const isDiscoveryView = !isSearchMode && !groupMode && !showAllCourses;
-  const seeAll = (group: "department" | "faculty" | "university" | "all") =>
-    setSearchParams({ group });
+  const seeAll = (
+    group: "department" | "faculty" | "university" | "general" | "all"
+  ) => setSearchParams({ group });
 
   const primaryFilters = (
     <>
@@ -482,11 +508,13 @@ export const Courses = () => {
               title={
                 groupMode === "department"
                   ? "Department Courses"
-                  : groupMode === "faculty"
-                    ? "Faculty Courses"
+                  : groupMode === "general"
+                    ? "General Courses"
                     : groupMode === "university"
                       ? "University Courses"
-                      : "All Courses"
+                      : groupMode === "faculty"
+                        ? "Faculty Courses"
+                        : "All Courses"
               }
               action={{
                 label: "Back to recommendations",
@@ -504,6 +532,17 @@ export const Courses = () => {
             courses={departmentList}
             source="dept-recommended"
             onSeeAll={() => seeAll("department")}
+          />
+        )}
+        
+{/* General — open to every student, whatever their year (Round 10) */}
+        {isDiscoveryView && generalList.length > 0 && (
+          <CourseSection
+            id="courses-general"
+            title="General Courses"
+            courses={generalList}
+            source="general-recommended"
+            onSeeAll={() => seeAll("general")}
           />
         )}
 
@@ -528,6 +567,8 @@ export const Courses = () => {
             onSeeAll={() => seeAll("university")}
           />
         )}
+
+        
 
         {/* Explore All (Unfiltered) */}
         {isDiscoveryView && exploreList.length > 0 && (
