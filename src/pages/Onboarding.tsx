@@ -1,32 +1,43 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   User,
   Phone,
-  BookOpen,
   GraduationCap,
   AlertCircle,
   ChevronRight,
   Lock,
+  Info,
 } from "lucide-react";
-import {
-  getUniversities,
-  getFaculties,
-  getDepartments,
-  getOrganizations,
-  saveDraft,
-  getDraft,
-  clearDraft,
-} from "../services/onboarding";
-import { completeOnboarding } from "../services/auth";
-import type {
-  OnboardingData,
-  OnboardingDraftLevel,
-} from "../types/onboarding";
+import { completeOnboarding, getAuthProfile } from "../services/auth";
+import type { OnboardingFormData } from "../types/onboarding";
 import type { CompleteOnboardingData } from "../services/auth";
 import { MascotInline, MascotStage } from "../components/auth/MascotCompanion";
 import type { MascotPose } from "../components/common/Mascot";
+import { BookOpen } from "lucide-react";
+import { InstitutionField } from "../components/onboarding/InstitutionField";
+import { MissingInstitutionDialog } from "../components/onboarding/MissingInstitutionDialog";
+import { useInstitutionLookups } from "../hooks/useInstitutionLookups";
+import {
+  clearOnboardingDraft,
+  loadOnboardingDraft,
+  saveOnboardingDraft,
+} from "../utils/onboardingDraft";
+import {
+  getOnboardingAccountId,
+  isOnboardingComplete,
+} from "../utils/onboardingSession";
+import {
+  isRegularLevel,
+  isSpecialLevel,
+  reachableStep,
+  stepFieldMessage,
+} from "../utils/onboardingValidation";
+import {
+  getSupportWhatsAppNumber,
+  type MissingInstitutionKind,
+} from "../utils/whatsapp";
 
 const steps = [
   "Personal Info",
@@ -46,100 +57,182 @@ const stepMascots: Array<{ pose: MascotPose; message: string }> = [
   },
 ];
 
+const EMPTY_FORM: OnboardingFormData = {
+  firstname: "",
+  lastname: "",
+  phone: "",
+  university_id: null,
+  faculty_id: null,
+  department_id: null,
+  organization_id: null,
+  level: "",
+  role: "student",
+  date_of_birth: "",
+  gender: undefined,
+  student_id: "",
+  password: "",
+  password_confirmation: "",
+  bio: "",
+};
+
+type LookupState = "idle" | "loading" | "error" | "ready";
+
+const lookupState = (
+  query: { isError: boolean; isSuccess: boolean },
+  parentReady: boolean
+): LookupState => {
+  if (!parentReady) return "idle";
+  if (query.isError) return "error";
+  return query.isSuccess ? "ready" : "loading";
+};
+
 export const Onboarding = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(0);
 
-  // Form data
-  const [formData, setFormData] = useState<
-    Omit<OnboardingData, "level"> & {
-      level: OnboardingDraftLevel;
-      date_of_birth?: string;
-      gender?: "male" | "female" | "other";
-      student_id?: string;
-      password?: string;
-      password_confirmation?: string;
-      bio?: string;
-    }
-  >({
-    firstname: "",
-    lastname: "",
-    phone: "",
-    university_id: null,
-    faculty_id: null,
-    department_id: null,
-    organization_id: null,
-    level: "",
-    role: "student",
-    date_of_birth: "",
-    gender: undefined,
-    student_id: "",
-    password: "",
-    password_confirmation: "",
-    bio: "",
+  // Which account this onboarding belongs to — the draft is scoped to it.
+  const [accountId] = useState(() => getOnboardingAccountId());
+
+  // Restore an interrupted onboarding (same account only). Done in the state
+  // initialisers, not an effect, so the autosave below can never overwrite the
+  // stored draft with the blank form before it has been read.
+  const [restored] = useState(() => {
+    const draft = loadOnboardingDraft(accountId);
+    const data: OnboardingFormData = { ...EMPTY_FORM, ...draft?.fields };
+    return { data, step: reachableStep(draft?.step ?? 0, data), found: !!draft };
   });
+  const [currentStep, setCurrentStep] = useState(restored.step);
+  const [formData, setFormData] = useState<OnboardingFormData>(restored.data);
+  const [notice, setNotice] = useState<string | null>(
+    restored.found
+      ? "Welcome back — we saved your answers. Your password isn't stored, so you'll set it again at the end."
+      : null
+  );
 
-  // Auto-save draft on changes
+  // Missing-institution help: which dialog is open, and what the student has
+  // asked support to add (kept only to say when it shows up in the list).
+  const [helpKind, setHelpKind] = useState<MissingInstitutionKind | null>(null);
+  const [requests, setRequests] = useState<
+    Partial<Record<MissingInstitutionKind, string>>
+  >({});
+  const supportNumber = getSupportWhatsAppNumber();
+
+  const submitted = useRef(false);
+
+  // Persist progress (never the password pair — see utils/onboardingDraft.ts).
   useEffect(() => {
-    if (Object.values(formData).some((v) => v !== "" && v !== null)) {
-      saveDraft(formData);
-    }
-  }, [formData]);
+    if (submitted.current) return;
+    saveOnboardingDraft(accountId, currentStep, formData);
+  }, [accountId, currentStep, formData]);
 
-  // Load draft on mount
+  // The server is the authority on whether onboarding is finished: a stale
+  // local session/draft (e.g. onboarded on another device) must not trap the
+  // student here. Failures are ignored so the form still works offline.
+  const profile = useQuery({
+    queryKey: ["onboarding-profile", accountId],
+    queryFn: getAuthProfile,
+    enabled: !!accountId,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const serverSaysComplete = isOnboardingComplete(profile.data?.user);
   useEffect(() => {
-    const draft = getDraft();
-    if (draft) {
-      setFormData((prev) => ({ ...prev, ...draft }));
+    if (!serverSaysComplete) return;
+    submitted.current = true;
+    clearOnboardingDraft(accountId);
+    navigate("/dashboard", { replace: true });
+  }, [serverSaysComplete, accountId, navigate]);
+
+  const {
+    universities,
+    faculties,
+    departments,
+    organizations,
+    universityConfirmed,
+    facultyConfirmed,
+    refreshUniversities,
+    refreshFaculties,
+    refreshDepartments,
+  } = useInstitutionLookups({
+    universityId: formData.university_id,
+    facultyId: formData.faculty_id,
+  });
+
+  const regular = isRegularLevel(formData.level);
+  const special = isSpecialLevel(formData.level);
+  const departmentConfirmed =
+    facultyConfirmed &&
+    !!formData.department_id &&
+    !!departments.data?.some((d) => d.id === formData.department_id);
+  // Every regular-level selection must be confirmed against the current lists
+  // (so a restored/stale id, or a faculty from another university, can't be
+  // submitted). Organization is optional and checked separately below.
+  const institutionsConfirmed =
+    !regular || (universityConfirmed && facultyConfirmed && departmentConfirmed);
+  const lookupFailed =
+    universities.isError || faculties.isError || departments.isError;
+
+  // Drop a selection that is no longer in the live list — and say so, rather
+  // than leaving it submittable or silently picking something else.
+  useEffect(() => {
+    const clear = (what: string, patch: Partial<OnboardingFormData>) => {
+      setFormData((prev) => ({ ...prev, ...patch }));
+      setCurrentStep((step) => Math.min(step, 2));
+      setNotice(
+        `Your ${what} is no longer in the list, so we cleared it. Please choose it again.`
+      );
+    };
+    if (regular) {
+      if (
+        universities.isSuccess &&
+        formData.university_id &&
+        !universities.data.some((u) => u.id === formData.university_id)
+      ) {
+        clear("university", {
+          university_id: null,
+          faculty_id: null,
+          department_id: null,
+        });
+      } else if (
+        faculties.isSuccess &&
+        formData.faculty_id &&
+        !faculties.data.some((f) => f.id === formData.faculty_id)
+      ) {
+        clear("faculty", { faculty_id: null, department_id: null });
+      } else if (
+        departments.isSuccess &&
+        formData.department_id &&
+        !departments.data.some((d) => d.id === formData.department_id)
+      ) {
+        clear("department", { department_id: null });
+      }
+    } else if (
+      special &&
+      organizations.isSuccess &&
+      formData.organization_id &&
+      !organizations.data.some((o) => o.id === formData.organization_id)
+    ) {
+      clear("organization", { organization_id: null });
     }
-  }, []);
-
-  // API queries
-  const { data: universities = [] } = useQuery({
-    queryKey: ["universities"],
-    queryFn: getUniversities,
-  });
-
-  const { data: organizations = [] } = useQuery({
-    queryKey: ["organizations"],
-    queryFn: getOrganizations,
-  });
-
-  const { data: faculties = [] } = useQuery({
-    queryKey: ["faculties", formData.university_id],
-    queryFn: () => getFaculties(formData.university_id as number),
-    enabled: !!formData.university_id,
-  });
-
-  const { data: departments = [] } = useQuery({
-    queryKey: ["departments", formData.university_id, formData.faculty_id],
-    queryFn: () => getDepartments(formData.university_id as number, formData.faculty_id as number),
-    enabled: !!formData.university_id && !!formData.faculty_id,
-  });
-
-  // Helper to determine if level requires university/faculty/department
-  const isRegularLevel = (level: string): boolean => {
-    return ["100", "200", "300", "400", "500"].includes(level);
-  };
-
-  // Helper to determine if level is UnderGrad or graduate
-  const isSpecialLevel = (level: string): boolean => {
-    return ["UnderGrad", "graduate"].includes(level);
-  };
+  }, [
+    regular,
+    special,
+    formData.university_id,
+    formData.faculty_id,
+    formData.department_id,
+    formData.organization_id,
+    universities.isSuccess,
+    universities.data,
+    faculties.isSuccess,
+    faculties.data,
+    departments.isSuccess,
+    departments.data,
+    organizations.isSuccess,
+    organizations.data,
+  ]);
 
   // Submit mutation
   const submitMutation = useMutation({
-    mutationFn: async (
-      data: Omit<OnboardingData, "level"> & {
-        level: OnboardingDraftLevel;
-        date_of_birth?: string;
-        gender?: "male" | "female" | "other";
-        student_id?: string;
-        password?: string;
-        password_confirmation?: string;
-        bio?: string;
-      }
-    ) => {
+    mutationFn: async (data: OnboardingFormData) => {
       if (!data.level) {
         throw new Error("Level is required");
       }
@@ -176,17 +269,33 @@ export const Onboarding = () => {
       return completeOnboarding(onboardingData);
     },
     onSuccess: () => {
-      clearDraft();
+      submitted.current = true;
+      clearOnboardingDraft(accountId);
       // User is now logged in (token moved from pending to main in completeOnboarding)
       navigate("/dashboard");
     },
   });
 
   const handleInputChange = (
-    field: keyof OnboardingData | string,
+    field: keyof OnboardingFormData | string,
     value: string | number | null | undefined
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const forgetRequests = (...kinds: MissingInstitutionKind[]) =>
+    setRequests((prev) => {
+      const next = { ...prev };
+      kinds.forEach((kind) => delete next[kind]);
+      return next;
+    });
+
+  const validateStep = (): boolean => {
+    if (stepFieldMessage(currentStep, formData) !== null) return false;
+    // Selections must also still exist, with the right parents, in the live
+    // lists — checked at the last two steps so a restored draft can't skip it.
+    if (currentStep >= 2 && !institutionsConfirmed) return false;
+    return true;
   };
 
   const handleNext = () => {
@@ -205,70 +314,37 @@ export const Onboarding = () => {
     }
   };
 
-  const validateStep = (): boolean => {
-    if (currentStep === 0) {
-      // Personal Info validation
-      if (!formData.firstname.trim()) return false;
-      if (!formData.lastname.trim()) return false;
-      if (!formData.phone.trim()) return false;
-      // Basic phone validation
-      if (!/^\+?[1-9]\d{1,14}$/.test(formData.phone.replace(/\s/g, "")))
-        return false;
-      return true;
-    } else if (currentStep === 1) {
-      // Level validation
-      return !!formData.level;
-    } else if (currentStep === 2) {
-      // Academic Details validation (conditional based on level)
-      if (isRegularLevel(formData.level)) {
-        // For levels 100-500: require university, faculty, department
-        if (!formData.university_id) return false;
-        if (!formData.faculty_id) return false;
-        if (!formData.department_id) return false;
-        return true;
-      } else if (isSpecialLevel(formData.level)) {
-        // For UnderGrad/graduate: organization is optional, no validation needed
-        return true;
-      }
-      return false;
-    } else if (currentStep === 3) {
-      // Account Setup validation
-      if (!formData.password || formData.password.length < 8) return false;
-      if (formData.password !== formData.password_confirmation) return false;
-      return true;
-    }
-    return false;
-  };
-
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
+    // Re-check at the moment of submit, not just when the button rendered.
+    if (!validateStep() || submitted.current) return;
     submitMutation.mutate(formData);
   };
 
   const getValidationMessage = (): string | null => {
-    if (currentStep === 0) {
-      if (!formData.firstname.trim()) return "First name is required";
-      if (!formData.lastname.trim()) return "Last name is required";
-      if (!formData.phone.trim()) return "Phone number is required";
-      if (!/^\+?[1-9]\d{1,14}$/.test(formData.phone.replace(/\s/g, ""))) {
-        return "Please enter a valid phone number";
-      }
-    } else if (currentStep === 1) {
-      if (!formData.level) return "Please select your level";
-    } else if (currentStep === 2) {
-      if (isRegularLevel(formData.level)) {
-        if (!formData.university_id) return "Please select a university";
-        if (!formData.faculty_id) return "Please select a faculty";
-        if (!formData.department_id) return "Please select a department";
-      }
-      // For UnderGrad/graduate, no validation needed (organization is optional)
-    } else if (currentStep === 3) {
-      if (!formData.password || formData.password.length < 8)
-        return "Password must be at least 8 characters";
-      if (formData.password !== formData.password_confirmation)
-        return "Passwords do not match";
+    const fieldMessage = stepFieldMessage(currentStep, formData);
+    if (fieldMessage) return fieldMessage;
+    if (currentStep === 3 && regular) {
+      // Passwords are fine; the institutions are what's missing (e.g. a saved
+      // selection was cleared). Step 3 can be reached straight from a draft.
+      const academic = stepFieldMessage(2, formData);
+      if (academic) return `${academic} — go Back to Academic Details.`;
+    }
+    if (currentStep >= 2 && !institutionsConfirmed) {
+      return lookupFailed
+        ? "We couldn't confirm your selections with the latest list. Use Retry on Academic Details."
+        : "Confirming your selections with the latest list…";
     }
     return null;
   };
+
+  const universityName =
+    (universityConfirmed &&
+      universities.data?.find((u) => u.id === formData.university_id)?.name) ||
+    null;
+  const facultyName =
+    (facultyConfirmed &&
+      faculties.data?.find((f) => f.id === formData.faculty_id)?.name) ||
+    null;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
@@ -418,13 +494,27 @@ export const Onboarding = () => {
                     <select
                       value={formData.level}
                       onChange={(e) => {
-                        handleInputChange("level", e.target.value);
-                        // Reset academic fields when level changes
-                        handleInputChange("university_id", null);
-                        handleInputChange("faculty_id", null);
-                        handleInputChange("department_id", null);
-                        handleInputChange("organization_id", null);
-                        handleInputChange("student_id", "");
+                        const next = e.target.value as OnboardingFormData["level"];
+                        // 100 -> 200 keeps the same university/faculty/department;
+                        // switching between a university level and UnderGrad/graduate
+                        // resets the academic fields, as before.
+                        const sameKind =
+                          (isRegularLevel(formData.level) && isRegularLevel(next)) ||
+                          (isSpecialLevel(formData.level) && isSpecialLevel(next));
+                        if (sameKind) {
+                          handleInputChange("level", next);
+                          return;
+                        }
+                        setFormData((prev) => ({
+                          ...prev,
+                          level: next,
+                          university_id: null,
+                          faculty_id: null,
+                          department_id: null,
+                          organization_id: null,
+                          student_id: "",
+                        }));
+                        setRequests({});
                       }}
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
                     >
@@ -450,103 +540,86 @@ export const Onboarding = () => {
                 </h2>
 
                 {/* For Regular Levels (100-500): Show University/Faculty/Department/Student ID */}
-                {isRegularLevel(formData.level) && (
+                {regular && (
                   <>
-                    {/* University */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        University *
-                      </label>
-                      <div className="relative">
-                        <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <select
-                          value={formData.university_id || ""}
-                          onChange={(e) => {
-                            handleInputChange(
-                              "university_id",
-                              e.target.value ? Number(e.target.value) : null
-                            );
-                            // Reset dependent fields
-                            handleInputChange("faculty_id", null);
-                            handleInputChange("department_id", null);
-                          }}
-                          className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none"
-                        >
-                          <option value="">Select a university</option>
-                          {universities.map((uni) => (
-                            <option key={uni.id} value={uni.id}>
-                              {uni.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
+                    <InstitutionField
+                      id="onboarding-university"
+                      kind="university"
+                      label="University"
+                      noun="universities"
+                      value={formData.university_id}
+                      options={universities.data ?? []}
+                      placeholder="Select a university"
+                      idlePlaceholder="Select a university"
+                      state={lookupState(universities, true)}
+                      isFetching={universities.isFetching}
+                      onChange={(id) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          university_id: id,
+                          // Dependent fields reset when their parent changes
+                          faculty_id: null,
+                          department_id: null,
+                        }));
+                        forgetRequests("faculty", "department");
+                      }}
+                      onRetry={() => universities.refetch()}
+                      onRefresh={refreshUniversities}
+                      onNeedHelp={() => setHelpKind("university")}
+                      requestedName={requests.university}
+                      emptyMessage="No universities are listed yet."
+                    />
 
-                    {/* Faculty */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Faculty *
-                      </label>
-                      <div className="relative">
-                        <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <select
-                          value={formData.faculty_id || ""}
-                          onChange={(e) => {
-                            handleInputChange(
-                              "faculty_id",
-                              e.target.value ? Number(e.target.value) : null
-                            );
-                            // Reset department
-                            handleInputChange("department_id", null);
-                          }}
-                          disabled={!formData.university_id}
-                          className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <option value="">
-                            {formData.university_id
-                              ? "Select a faculty"
-                              : "Select a university first"}
-                          </option>
-                          {faculties.map((faculty) => (
-                            <option key={faculty.id} value={faculty.id}>
-                              {faculty.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
+                    <InstitutionField
+                      id="onboarding-faculty"
+                      kind="faculty"
+                      label="Faculty"
+                      noun="faculties"
+                      value={formData.faculty_id}
+                      options={faculties.data ?? []}
+                      placeholder="Select a faculty"
+                      idlePlaceholder="Select a university first"
+                      state={lookupState(
+                        faculties,
+                        universityConfirmed && !universities.isError
+                      )}
+                      isFetching={faculties.isFetching}
+                      onChange={(id) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          faculty_id: id,
+                          department_id: null,
+                        }));
+                        forgetRequests("department");
+                      }}
+                      onRetry={() => faculties.refetch()}
+                      onRefresh={refreshFaculties}
+                      onNeedHelp={() => setHelpKind("faculty")}
+                      requestedName={requests.faculty}
+                      emptyMessage="No faculties are listed for this university yet."
+                    />
 
-                    {/* Department */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Department *
-                      </label>
-                      <div className="relative">
-                        <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <select
-                          value={formData.department_id || ""}
-                          onChange={(e) =>
-                            handleInputChange(
-                              "department_id",
-                              e.target.value ? Number(e.target.value) : null
-                            )
-                          }
-                          disabled={!formData.faculty_id}
-                          className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <option value="">
-                            {formData.faculty_id
-                              ? "Select a department"
-                              : "Select a faculty first"}
-                          </option>
-                          {departments.map((dept) => (
-                            <option key={dept.id} value={dept.id}>
-                              {dept.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
+                    <InstitutionField
+                      id="onboarding-department"
+                      kind="department"
+                      label="Department"
+                      noun="departments"
+                      value={formData.department_id}
+                      options={departments.data ?? []}
+                      placeholder="Select a department"
+                      idlePlaceholder="Select a faculty first"
+                      state={lookupState(
+                        departments,
+                        facultyConfirmed && !faculties.isError
+                      )}
+                      isFetching={departments.isFetching}
+                      onChange={(id) => handleInputChange("department_id", id)}
+                      onRetry={() => departments.refetch()}
+                      onRefresh={refreshDepartments}
+                      onNeedHelp={() => setHelpKind("department")}
+                      requestedName={requests.department}
+                      emptyMessage="No departments are listed for this faculty yet."
+                    />
 
                     {/* Student ID */}
                     <div>
@@ -590,7 +663,7 @@ export const Onboarding = () => {
                         <option value="">
                           Select an organization (optional)
                         </option>
-                        {organizations.map((org) => (
+                        {(organizations.data ?? []).map((org) => (
                           <option key={org.id} value={org.id}>
                             {org.name}
                           </option>
@@ -654,6 +727,26 @@ export const Onboarding = () => {
               </div>
             )}
 
+            {/* Resume / stale-selection notice */}
+            {notice && (
+              <div
+                role="status"
+                className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-3"
+              >
+                <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <p className="flex-1 text-sm text-blue-700 dark:text-blue-300">
+                  {notice}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setNotice(null)}
+                  className="bg-transparent p-0 text-sm font-semibold text-blue-700 dark:text-blue-300 underline"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             {/* Validation Message */}
             {getValidationMessage() && (
               <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center gap-3">
@@ -701,6 +794,20 @@ export const Onboarding = () => {
           </div>
         </div>
       </div>
+      {helpKind && (
+        <MissingInstitutionDialog
+          key={helpKind}
+          open
+          kind={helpKind}
+          onClose={() => setHelpKind(null)}
+          supportNumber={supportNumber}
+          universityName={universityName}
+          facultyName={facultyName}
+          onOpenedWhatsApp={(kind, name) =>
+            setRequests((prev) => ({ ...prev, [kind]: name }))
+          }
+        />
+      )}
     </div>
   );
 };

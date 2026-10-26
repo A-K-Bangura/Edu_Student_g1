@@ -1,6 +1,7 @@
 import axios, { AxiosError } from "axios";
 import type { InternalAxiosRequestConfig } from "axios";
 import { env } from "../config/env";
+import { redirectTo } from "../utils/navigation";
 
 // Create axios instance
 export const api = axios.create({
@@ -36,18 +37,31 @@ api.interceptors.response.use(
     // now browsable as a guest (no token) and call auth-required endpoints
     // for account-scoped actions only — a guest was never logged in, so
     // there's no session to expire and nothing to redirect away from.
-    if (error.response?.status === 401 && localStorage.getItem("auth_token")) {
+    const hasPendingToken = !!localStorage.getItem("pending_auth_token");
+    if (
+      error.response?.status === 401 &&
+      (localStorage.getItem("auth_token") || hasPendingToken)
+    ) {
       const currentPath = window.location.pathname;
-      const isLoginPage =
-        currentPath === "/auth/login" || currentPath.includes("/auth/login");
+      const isAuthPage = currentPath.startsWith("/auth/");
 
-      if (!isLoginPage) {
-        // Handle unauthorized - clear all tokens and redirect to login
+      if (!isAuthPage) {
+        // Handle unauthorized - clear all tokens. The on-device onboarding
+        // draft is deliberately NOT cleared: it is account-scoped and holds
+        // no secrets, so the student picks up where they left off after
+        // signing back in.
+        const wasOnboarding = hasPendingToken;
         localStorage.removeItem("auth_token");
         localStorage.removeItem("pending_auth_token");
         localStorage.removeItem("user");
         localStorage.removeItem("pending_user");
-        window.location.href = "/auth/login";
+        // A student who only ever verified their email has no usable password
+        // yet (docs/STUDENT_API_PAYLOADS.md §3), so password login can't
+        // recover them: they re-verify by email code, then land back in
+        // onboarding with their draft.
+        redirectTo(
+          wasOnboarding ? "/auth/signup?reason=session-expired" : "/auth/login"
+        );
       }
     }
     return Promise.reject(error);

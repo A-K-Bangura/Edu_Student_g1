@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { isAuthenticated } from "../../services/auth";
+import {
+  getActiveSessionUser,
+  hasPendingOnboardingSession,
+  isOnboardingComplete,
+} from "../../utils/onboardingSession";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -14,37 +19,27 @@ export const ProtectedRoute = ({
   requireOnboarding = false,
 }: ProtectedRouteProps) => {
   const location = useLocation();
-  
+
   // Check if user is authenticated (has main auth token)
   const authenticated = isAuthenticated();
-  
-  // Check if user has pending token (for onboarding flow)
-  const hasPendingToken = !!localStorage.getItem("pending_auth_token");
 
-  // Get user data to check onboarding status
-  const userStr = localStorage.getItem("user") || localStorage.getItem("pending_user");
-  const parsedUser = userStr ? JSON.parse(userStr) : null;
+  // A verified student who hasn't finished onboarding holds only a pending
+  // token (see services/auth.ts::verifyOtp).
+  const hasPendingToken = hasPendingOnboardingSession();
 
-  // Check if user has completed onboarding.
-  // There is no `is_onboarded` field anywhere in the API (see
-  // docs/STUDENT_API_PAYLOADS.md) — `level` is only ever set once Complete
-  // Onboarding has run (it's `null` on a fresh OTP-verified account), so its
-  // presence is a reliable signal for both university-affiliated and
-  // organization-affiliated (UnderGrad/graduate) students alike.
-  const hasOnboarded = !!(
-    parsedUser?.firstname &&
-    parsedUser?.lastname &&
-    parsedUser?.level
-  );
+  // A token isn't proof of a finished profile — judge by the stored user of the
+  // session requests are actually made as (see utils/onboardingSession.ts).
+  const hasOnboarded = isOnboardingComplete(getActiveSessionUser());
 
-  // For onboarding route, allow access if user has pending token (new signup flow)
-  // For other routes, require full authentication
+  // The onboarding route also accepts the pending token; every other route
+  // needs a full session.
   const isOnboardingRoute = location.pathname === "/onboarding";
   const canAccess = authenticated || (isOnboardingRoute && hasPendingToken);
 
-  // Redirect to login if authentication is required but user cannot access
   if (requireAuth && !canAccess) {
-    return <Navigate to="/auth/login" replace />;
+    // A pending student can't use password login (their account has no usable
+    // password yet), so send them back to finish onboarding, not to login.
+    return <Navigate to={hasPendingToken ? "/onboarding" : "/auth/login"} replace />;
   }
 
   // If onboarding is required and user hasn't onboarded, redirect to onboarding

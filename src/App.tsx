@@ -7,7 +7,7 @@ import { ProtectedRoute } from "./components/common/ProtectedRoute";
 import { OfflineIndicator } from "./components/common/OfflineIndicator";
 import { PageShell } from "./components/layout/PageShell";
 import { useUIStore } from "./store/uiStore";
-import { isAuthenticated } from "./services/auth";
+import { HomeGate } from "./components/common/HomeGate";
 
 // Lazy load pages for code splitting
 const Dashboard = lazy(() =>
@@ -307,25 +307,10 @@ function App() {
               />
 
               {/* Root: dashboard for signed-in users, landing page for guests */}
-              <Route
-                path="/"
-                element={
-                  isAuthenticated() ? (
-                    <Navigate to="/dashboard" replace />
-                  ) : (
-                    <Landing />
-                  )
-                }
-              />
+              <Route path="/" element={<HomeGate guest={<Landing />} />} />
               <Route
                 path="*"
-                element={
-                  isAuthenticated() ? (
-                    <Navigate to="/dashboard" replace />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                }
+                element={<HomeGate guest={<Navigate to="/" replace />} />}
               />
             </Routes>
           </Suspense>

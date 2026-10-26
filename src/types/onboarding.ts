@@ -44,3 +44,32 @@ export interface OnboardingData {
 
 /** Local draft / form state may use "" for level until the user selects one */
 export type OnboardingDraftLevel = AcademicLevel | "";
+
+/** Everything the onboarding form holds in memory (includes the password pair). */
+export interface OnboardingFormData
+  extends Omit<OnboardingData, "level"> {
+  level: OnboardingDraftLevel;
+  date_of_birth?: string;
+  gender?: "male" | "female" | "other";
+  student_id?: string;
+  password?: string;
+  password_confirmation?: string;
+  bio?: string;
+}
+
+/**
+ * The only fields written to the on-device draft. Deliberately excludes
+ * `password`/`password_confirmation` (and anything else not needed to resume).
+ */
+export type OnboardingDraftFields = Pick<
+  OnboardingFormData,
+  | "firstname"
+  | "lastname"
+  | "phone"
+  | "level"
+  | "university_id"
+  | "faculty_id"
+  | "department_id"
+  | "organization_id"
+  | "student_id"
+>;

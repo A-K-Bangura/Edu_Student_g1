@@ -37,6 +37,10 @@ export const API_URL = resolveApiUrl();
 export const env = {
   API_URL,
   ENV: import.meta.env.VITE_ENV || "development",
+  /** UniVybe support WhatsApp number (public; used for "can't find my institution"). */
+  SUPPORT_WHATSAPP_NUMBER: import.meta.env.VITE_SUPPORT_WHATSAPP_NUMBER as
+    | string
+    | undefined,
   isDevelopment: import.meta.env.DEV,
   isProduction: import.meta.env.PROD,
   enableDebugLogs:

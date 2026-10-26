@@ -2,6 +2,39 @@ import api from "./api";
 import type { ApiResponse, User } from "../types";
 import { ApiError } from "../utils/apiError";
 import type { AxiosError } from "axios";
+import {
+  hasPendingOnboardingSession,
+  isOnboardingComplete,
+} from "../utils/onboardingSession";
+import { clearAllOnboardingDrafts } from "../utils/onboardingDraft";
+
+const clearPendingSession = () => {
+  localStorage.removeItem("pending_auth_token");
+  localStorage.removeItem("pending_user");
+};
+
+const clearFullSession = () => {
+  localStorage.removeItem("auth_token");
+  localStorage.removeItem("user");
+};
+
+/** Make `token`/`user` the one fully signed-in session. */
+const storeFullSession = (token: string, user: User) => {
+  clearPendingSession();
+  localStorage.setItem("auth_token", token);
+  localStorage.setItem("user", JSON.stringify(user));
+};
+
+/**
+ * Make `token`/`user` the verified-but-not-onboarded session. A fresh
+ * verification supersedes whatever session was there, so a previous account's
+ * `auth_token` can't linger and be mistaken for this one.
+ */
+const storePendingSession = (token: string, user: User) => {
+  clearFullSession();
+  localStorage.setItem("pending_auth_token", token);
+  localStorage.setItem("pending_user", JSON.stringify(user));
+};
 
 export interface LoginCredentials {
   email?: string;
@@ -78,9 +111,8 @@ export const login = async (
       throw new Error(response.data.message || "Login failed");
     }
 
-    // Store token
-    localStorage.setItem("auth_token", response.data.data.token);
-    localStorage.setItem("user", JSON.stringify(response.data.data.user));
+    // Store token (clears any leftover pending-onboarding session)
+    storeFullSession(response.data.data.token, response.data.data.user);
 
     return response.data.data;
   } catch (error) {
@@ -133,20 +165,23 @@ export const verifyOtp = async (
     throw new Error(response.data.message || "OTP verification failed");
   }
 
-  const data = response.data.data;
+  // Don't trust the flag alone: a token is not proof of a finished profile.
+  // Anything the API says still needs onboarding, or whose user object lacks
+  // the onboarding fields, goes down the pending path.
+  const data: VerifyOtpResponse = {
+    ...response.data.data,
+    requires_onboarding:
+      response.data.data.requires_onboarding === true ||
+      !isOnboardingComplete(response.data.data.user),
+  };
 
-  // For new signups requiring onboarding, store token temporarily
-  // User will only be logged in after completing onboarding
   if (data.token) {
     if (data.requires_onboarding) {
-      // Store token temporarily for onboarding API calls
-      localStorage.setItem("pending_auth_token", data.token);
-      // Store minimal user info for onboarding page
-      localStorage.setItem("pending_user", JSON.stringify(data.user));
+      // The token is only good for finishing onboarding until that succeeds.
+      storePendingSession(data.token, data.user);
     } else {
-      // For existing users or already onboarded, log in immediately
-      localStorage.setItem("auth_token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      // Existing, fully onboarded student: signed in straight away.
+      storeFullSession(data.token, data.user);
     }
   }
 
@@ -189,10 +224,11 @@ export const logout = async (): Promise<void> => {
   } catch (error) {
     console.error("Logout error:", error);
   } finally {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("pending_auth_token");
-    localStorage.removeItem("pending_user");
+    clearFullSession();
+    clearPendingSession();
+    // Explicit sign-out (possibly on a shared device): forget on-device
+    // onboarding drafts too. Session *expiry* keeps them — see api.ts.
+    clearAllOnboardingDrafts();
   }
 };
 
@@ -206,9 +242,20 @@ export const getAuthProfile = async (): Promise<{ user: User }> => {
     throw new Error(response.data.message || "Failed to get profile");
   }
 
-  // Update user in localStorage
-  if (response.data.data.user) {
-    localStorage.setItem("user", JSON.stringify(response.data.data.user));
+  const { user } = response.data.data;
+  if (user) {
+    if (!hasPendingOnboardingSession()) {
+      localStorage.setItem("user", JSON.stringify(user));
+    } else if (isOnboardingComplete(user)) {
+      // Onboarded elsewhere (another device) while this one held a pending
+      // token: the server says it's done, so promote it to a full session.
+      const pendingToken = localStorage.getItem("pending_auth_token");
+      if (pendingToken) storeFullSession(pendingToken, user);
+    } else {
+      // Still onboarding: keep the profile with the pending session rather
+      // than as a signed-in `user`.
+      localStorage.setItem("pending_user", JSON.stringify(user));
+    }
   }
 
   return response.data.data;

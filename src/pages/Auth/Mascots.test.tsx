@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 vi.mock("../../services/auth", () => ({
   isAuthenticated: vi.fn(() => false),
   completeOnboarding: vi.fn(),
+  getAuthProfile: vi.fn(),
   login: vi.fn(),
   sendOtp: vi.fn(),
   verifyOtp: vi.fn(),
@@ -17,9 +18,6 @@ vi.mock("../../services/onboarding", () => ({
   getFaculties: vi.fn().mockResolvedValue([]),
   getDepartments: vi.fn().mockResolvedValue([]),
   getOrganizations: vi.fn().mockResolvedValue([]),
-  saveDraft: vi.fn(),
-  getDraft: vi.fn(() => null),
-  clearDraft: vi.fn(),
 }));
 
 import { Login } from "./Login";
