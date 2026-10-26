@@ -1,3 +1,5 @@
+import type { AcademicModule } from "./academicModule";
+
 // Search Result - Course
 export interface CourseSearchItem {
   id: number;
@@ -13,6 +15,8 @@ export interface CourseSearchItem {
   tags?: string[];
   enrollments_count?: number;
   thumbnail_url?: string;
+  /** Round 12: the official university module this course is tagged with, or `null`. */
+  academic_module?: AcademicModule | null;
 }
 
 // Search Result - Post

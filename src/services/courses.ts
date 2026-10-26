@@ -27,6 +27,8 @@ export const getCourses = async (
     params.append("organization_id", filters.organization_id.toString());
   if (filters.level) params.append("level", filters.level);
   if (filters.search) params.append("search", filters.search);
+  if (filters.academic_module_id)
+    params.append("academic_module_id", filters.academic_module_id.toString());
   if (filters.sort_by) params.append("sort_by", filters.sort_by);
   if (filters.sort_order) params.append("sort_order", filters.sort_order);
   if (filters.page) params.append("page", filters.page.toString());

@@ -292,6 +292,11 @@ export const CourseDetailPage = () => {
 
           {/* Title and Meta */}
           <div className="mb-6">
+            {course.academic_module && (
+              <p className="mb-1.5 text-sm font-bold uppercase tracking-wide text-azure-500 dark:text-azure-700">
+                {course.academic_module.label}
+              </p>
+            )}
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
               {course.title}
             </h1>
