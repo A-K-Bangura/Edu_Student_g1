@@ -44,10 +44,10 @@ export const OutlineSidebar = ({
       <div
         className={`
           ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
-          fixed md:sticky top-20 left-0 h-[calc(100vh-5rem)] w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg md:shadow-none z-30 transition-transform duration-300 overflow-y-auto
+          fixed md:sticky top-0 left-0 h-dvh w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg md:shadow-none z-30 transition-transform duration-300 overflow-y-auto
         `}
       >
-        <div className="p-4 pb-20 md:pb-4">
+        <div className="p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Course Outline

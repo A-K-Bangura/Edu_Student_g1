@@ -286,38 +286,20 @@ export const QuizRenderer = ({
   const questionFeedback = feedback[currentQuestion.id];
 
   return (
-    <div className={className ?? "max-w-3xl mx-auto p-6"}>
-      {/* Progress Bar */}
-      {/* <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Question {currentQuestionIndex + 1} of {totalQuestions}
-          </h2>
-          <span className="text-sm text-gray-600 dark:text-gray-400">
-            {Math.round(progress)}% Complete
-          </span>
-        </div>
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div
-            className="bg-azure-500 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div> */}
-
-      {/* Question Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 border border-gray-200 dark:border-gray-700 mb-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+    <div className={className ?? ""}>
+      {/* Question */}
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           {currentQuestion.text}
         </h3>
 
         {/* Optional image under the question */}
         {quiz.image_url && (
-          <div className="mb-6">
+          <div className="mb-4">
             <img
               src={quiz.image_url}
               alt="Quiz illustration"
-              className="rounded-lg border border-gray-200 dark:border-gray-700 max-h-80 object-contain w-full"
+              className="rounded-lg max-h-80 object-contain w-full"
             />
           </div>
         )}
@@ -339,10 +321,10 @@ export const QuizRenderer = ({
                 return (
                   <label
                     key={option.id}
-                    className={`flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                    className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
                       isSelected
                         ? "border-azure-500 bg-azure-50 dark:border-azure-400/60 dark:bg-azure-900/30"
-                        : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        : "border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                     }`}
                   >
                     <input

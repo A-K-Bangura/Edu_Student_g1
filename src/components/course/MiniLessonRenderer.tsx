@@ -105,16 +105,8 @@ const TextBlock = ({
 
   if (textType === "plain") {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-        {/* <div className="flex items-center gap-2 mb-4">
-          <FileText className="w-5 h-5 text-azure-500" />
-          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-            Text Content
-          </span>
-        </div> */}
-        <div className="prose dark:prose-invert max-w-none space-y-3 text-gray-700 dark:text-gray-200">
-          {renderTextContent(content)}
-        </div>
+      <div className="prose dark:prose-invert max-w-none space-y-3 text-gray-700 dark:text-gray-200">
+        {renderTextContent(content)}
       </div>
     );
   }
@@ -128,18 +120,16 @@ const TextBlock = ({
       });
 
       return (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-          <div
-            className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 px-4 py-3"
-            role="math"
-            aria-label="Formula"
-            dangerouslySetInnerHTML={{ __html: renderedFormula }}
-          />
-        </div>
+        <div
+          className="overflow-x-auto rounded bg-gray-50 dark:bg-gray-800/60 px-4 py-3"
+          role="math"
+          aria-label="Formula"
+          dangerouslySetInnerHTML={{ __html: renderedFormula }}
+        />
       );
     } catch {
       return (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+        <div className="text-sm text-red-700 dark:text-red-300">
           Unable to display formula.
         </div>
       );
@@ -154,18 +144,26 @@ const TextBlock = ({
     return <PromptBlock content={content} />;
   }
 
-  const styles: Record<MiniLessonTextType, string> = {
-    remember:
-      "bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-800",
-    simply_put:
-      "bg-sky-50 border border-sky-200 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200 dark:border-sky-800",
-    important:
-      "bg-rose-50 border border-rose-200 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200 dark:border-rose-800",
-    formula: "",
-    plain: "", // handled earlier
-    link: "", // handled earlier
-    prompt: "", // handled earlier
-  } as const;
+  // Flattened per the design spec: a colored left rule + label, a restrained
+  // background tint, and dark/readable body text — no rounded card, shadow,
+  // or colored body text (which would hurt contrast, especially for "important").
+  const accents: Record<string, { rule: string; label: string; tint: string }> = {
+    remember: {
+      rule: "border-emerald-400 dark:border-emerald-500",
+      label: "text-emerald-700 dark:text-emerald-300",
+      tint: "bg-emerald-50/60 dark:bg-emerald-900/10",
+    },
+    simply_put: {
+      rule: "border-sky-400 dark:border-sky-500",
+      label: "text-sky-700 dark:text-sky-300",
+      tint: "bg-sky-50/60 dark:bg-sky-900/10",
+    },
+    important: {
+      rule: "border-rose-400 dark:border-rose-500",
+      label: "text-rose-700 dark:text-rose-300",
+      tint: "bg-rose-50/60 dark:bg-rose-900/10",
+    },
+  };
 
   const iconMap: Record<MiniLessonTextType, ReactElement> = {
     remember: <Sparkles className="w-4 h-4" />,
@@ -187,16 +185,20 @@ const TextBlock = ({
     prompt: " ",
   } as const;
 
+  const accent = accents[textType] ?? accents.simply_put;
+
   return (
     <div
-      className={`rounded-lg p-5 shadow-sm flex items-start gap-3 ${styles[textType]}`}
+      className={`border-l-4 ${accent.rule} ${accent.tint} pl-4 py-2 flex items-start gap-3`}
     >
-      <span className="mt-1">{iconMap[textType]}</span>
-      <div className="space-y-2 text-sm">
-        <p className="font-semibold uppercase tracking-wide text-xs opacity-80">
+      <span className={`mt-1 ${accent.label}`}>{iconMap[textType]}</span>
+      <div className="space-y-1 text-sm">
+        <p className={`font-semibold uppercase tracking-wide text-xs ${accent.label}`}>
           {titles[textType]}
         </p>
-        <div className="space-y-3">{renderTextContent(content)}</div>
+        <div className="space-y-3 text-gray-900 dark:text-gray-100">
+          {renderTextContent(content)}
+        </div>
       </div>
     </div>
   );
@@ -225,7 +227,7 @@ const LinkBlock = ({
   }
 
   return (
-    <div className="own-links bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+    <div className="own-links">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <a
           href={content}
@@ -282,7 +284,7 @@ const PromptBlock = ({ content }: { content: string }): ReactElement => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+    <div>
       <div className="mb-3 flex items-center justify-between gap-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
           Prompt
@@ -325,42 +327,34 @@ const ImageBlock = ({
   const description = block.content;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        {/* <div className="flex items-center gap-2">
-          <ImageIcon className="w-5 h-5 text-azure-500" />
-          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-            Image
-          </span>
-        </div> */}
-        {block.media_url && (
-          <div className="flex items-center w-full justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => onPreview(block.media_url as string)}
-              className="inline-flex items-center gap-2 text-sm text-azure-500 hover:text-azure-600"
-            >
-              <ExternalLink className="w-4 h-4" />
-              {/* View */}
-            </button>
-            <a
-              href={block.media_url}
-              download
-              className="inline-flex items-center gap-2 text-sm text-azure-500 hover:text-azure-600"
-            >
-              <Download className="w-4 h-4" />
-              {/* Download */}
-            </a>
-          </div>
-        )}
-      </div>
+    <div>
+      {block.media_url && (
+        <div className="flex items-center justify-end gap-3 mb-2">
+          <button
+            type="button"
+            onClick={() => onPreview(block.media_url as string)}
+            aria-label="View larger"
+            className="inline-flex items-center gap-2 text-sm text-azure-500 hover:text-azure-600"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </button>
+          <a
+            href={block.media_url}
+            download
+            aria-label="Download image"
+            className="inline-flex items-center gap-2 text-sm text-azure-500 hover:text-azure-600"
+          >
+            <Download className="w-4 h-4" />
+          </a>
+        </div>
+      )}
 
       {block.media_url ? (
-        <div className="space-y-4">
+        <div className="space-y-2">
           <img
             src={block.media_url}
             alt={description || miniLessonFallbackAlt(block)}
-            className="w-full rounded-lg shadow-md cursor-pointer"
+            className="w-full rounded-lg cursor-pointer"
             onClick={() => onPreview(block.media_url as string)}
             loading="lazy"
           />
@@ -380,18 +374,12 @@ const ImageBlock = ({
 };
 
 const VideoBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-    {/* <div className="flex items-center gap-2 mb-4">
-      <Video className="w-5 h-5 text-azure-500" />
-      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-        Video Content
-      </span>
-    </div> */}
+  <div>
     {block.media_url ? (
-      <div className="space-y-4">
+      <div className="space-y-2">
         <video
           controls
-          className="w-full rounded-lg shadow-md"
+          className="w-full rounded-lg"
           src={block.media_url}
           preload="metadata"
         >
@@ -416,15 +404,9 @@ const EmbedBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => {
   const embedUrl = getYouTubeEmbedUrl(url);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-      {/* <div className="flex items-center gap-2 mb-4">
-        <Video className="w-5 h-5 text-azure-500" />
-        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-          Embedded Video
-        </span>
-      </div> */}
+    <div>
       {embedUrl ? (
-        <div className="aspect-video rounded-lg overflow-hidden shadow-md">
+        <div className="aspect-video rounded-lg overflow-hidden">
           <iframe
             src={embedUrl}
             title="Embedded content"
@@ -439,7 +421,7 @@ const EmbedBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => {
         </p>
       )}
       {block.content && (
-        <p className="mt-4 text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
           {block.content}
         </p>
       )}
@@ -448,15 +430,9 @@ const EmbedBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => {
 };
 
 const DocumentBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-    <div className="flex items-center justify-between gap-2 mb-4">
-      {/* <div className="flex items-center gap-2">
-        <FileText className="w-5 h-5 text-azure-500" />
-        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-          Document
-        </span>
-      </div> */}
-      {block.media_url && (
+  <div>
+    {block.media_url && (
+      <div className="flex justify-end mb-2">
         <a
           href={block.media_url}
           download
@@ -464,8 +440,8 @@ const DocumentBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => (
         >
           <Download className="w-4 h-4" /> Download
         </a>
-      )}
-    </div>
+      </div>
+    )}
     {block.media_url ? (
       <iframe
         src={block.media_url}
@@ -478,7 +454,7 @@ const DocumentBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => (
       </p>
     )}
     {block.content && (
-      <p className="mt-4 text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
         {block.content}
       </p>
     )}

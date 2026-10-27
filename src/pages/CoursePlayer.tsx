@@ -1186,8 +1186,8 @@ export const CoursePlayer = () => {
   // Show sequential access error if present
   if (sequentialAccessError && !isLoading) {
     return (
-      <PageShell showTopNav={false}>
-        <div className="flex justify-center items-center h-screen bg-gray-50 dark:bg-gray-900">
+      <PageShell showTopNav={false} showBottomNav={false}>
+        <div className="flex justify-center items-center h-dvh bg-gray-50 dark:bg-gray-900">
           <div className="max-w-2xl w-full mx-4">
             <div className="bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-lg shadow-lg p-8">
               <div className="flex items-start gap-4">
@@ -1245,8 +1245,8 @@ export const CoursePlayer = () => {
   // Loading state
   if (isLoading || !lessonContent) {
     return (
-      <PageShell showTopNav={false}>
-        <div className="flex justify-center items-center h-screen">
+      <PageShell showTopNav={false} showBottomNav={false}>
+        <div className="flex justify-center items-center h-dvh">
           <div className="animate-pulse text-gray-600 dark:text-gray-400">
             Loading lesson...
           </div>
@@ -1256,8 +1256,8 @@ export const CoursePlayer = () => {
   }
 
   return (
-    <PageShell showTopNav={false}>
-      <div className="flex h-screen overflow-hidden">
+    <PageShell showTopNav={false} showBottomNav={false}>
+      <div className="flex h-dvh overflow-hidden">
         {/* Outline Sidebar */}
         <OutlineSidebar
           outline={outline || { modules: [] }}
@@ -1270,65 +1270,73 @@ export const CoursePlayer = () => {
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
-          {/* Header */}
-          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={toggleSidebar}
-                className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg relative"
-              >
-                <Menu
-                  className={`w-6 h-6 text-gray-600 dark:text-gray-400 transition-all duration-300 ${
-                    isSidebarOpen
-                      ? "opacity-0 rotate-90 scale-0"
-                      : "opacity-100 rotate-0 scale-100"
-                  }`}
-                />
-                <X
-                  className={`w-6 h-6 text-gray-600 dark:text-gray-400 absolute top-2 left-2 transition-all duration-300 ${
-                    isSidebarOpen
-                      ? "opacity-100 rotate-0 scale-100"
-                      : "opacity-0 rotate-90 scale-0"
-                  }`}
-                />
-              </button>
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {lessonContent.title}
-                </h1>
-                {currentModule && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {currentModule.title}
-                  </p>
-                )}
-              </div>
+          {/* Screen-position progress bar — NOT lesson/course completion.
+              Reaching the end here must never imply the lesson is complete. */}
+          {hasScreens && (
+            <div
+              role="progressbar"
+              aria-label="Lesson progress"
+              aria-valuemin={1}
+              aria-valuemax={totalScreens}
+              aria-valuenow={currentScreenIndex + 1}
+              className="h-1 w-full shrink-0 bg-gray-200 dark:bg-gray-700"
+            >
+              <div
+                className="h-full bg-azure-500 transition-[width] duration-300"
+                style={{
+                  width: `${((currentScreenIndex + 1) / totalScreens) * 100}%`,
+                }}
+              />
             </div>
+          )}
 
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                {currentScreenIndex + 1} / {lessonScreens.length}
-              </span>
+          {/* Header */}
+          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center gap-4">
+            <button
+              onClick={toggleSidebar}
+              aria-label={isSidebarOpen ? "Close course outline" : "Open course outline"}
+              className="md:hidden shrink-0 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg relative"
+            >
+              <Menu
+                className={`w-6 h-6 text-gray-600 dark:text-gray-400 transition-all duration-300 ${
+                  isSidebarOpen
+                    ? "opacity-0 rotate-90 scale-0"
+                    : "opacity-100 rotate-0 scale-100"
+                }`}
+              />
+              <X
+                className={`w-6 h-6 text-gray-600 dark:text-gray-400 absolute top-2 left-2 transition-all duration-300 ${
+                  isSidebarOpen
+                    ? "opacity-100 rotate-0 scale-100"
+                    : "opacity-0 rotate-90 scale-0"
+                }`}
+              />
+            </button>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg font-semibold text-gray-900 dark:text-white break-words">
+                {lessonContent.title}
+              </h1>
+              {currentModule && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 break-words">
+                  {currentModule.title}
+                </p>
+              )}
             </div>
           </div>
 
           {/* Mini-Lesson and Quiz Content */}
-          <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 p-4 md:p-8">
-            <div className="max-w-3xl mx-auto space-y-6">
+          <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 px-4 py-4 md:px-8 md:py-8">
+            <div className="max-w-3xl mx-auto space-y-6 pb-6">
               {currentScreen ? (
                 currentScreen.kind === "mini" ? (
                   <MiniLessonRenderer miniLesson={currentScreen.data} />
                 ) : currentQuiz ? (
-                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-                    <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Lesson Quiz
-                      </h2>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Complete this quiz to solidify what you just learned.
-                      </p>
-                    </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">
+                      Quick check
+                    </p>
                     <QuizRenderer
-                      className="p-6"
+                      className=""
                       quiz={currentQuiz}
                       onSubmit={(submission, meta) =>
                         handleQuizSubmit(currentQuiz.id, submission, meta)
@@ -1338,49 +1346,54 @@ export const CoursePlayer = () => {
                       }
                     />
                     {currentQuizFeedback && (
-                      <div className="px-6 pb-6">{currentQuizFeedback}</div>
+                      <div className="mt-2">{currentQuizFeedback}</div>
                     )}
                   </div>
                 ) : (
-                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center text-sm text-gray-600 dark:text-gray-400">
+                  <div className="text-center text-sm text-gray-600 dark:text-gray-400">
                     Select a lesson from the outline to begin.
                   </div>
                 )
               ) : (
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center text-sm text-gray-600 dark:text-gray-400">
+                <div className="text-center text-sm text-gray-600 dark:text-gray-400">
                   Select a lesson from the outline to begin.
                 </div>
               )}
             </div>
           </div>
 
-          {/* Navigation Controls */}
+          {/* Lesson toolbar */}
           {hasScreens && (
             <>
-              <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
+              <div
+                className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-3 py-2 flex items-center justify-between gap-2"
+                style={{
+                  paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
+                }}
+              >
                 <button
                   onClick={handlePrevMiniLesson}
                   disabled={!canGoPrev}
-                  className="flex items-center gap-2 px-6 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+                  aria-label="Previous screen"
+                  className="shrink-0 flex items-center justify-center w-11 h-11 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
                 >
                   <ChevronLeft className="w-5 h-5" />
-                  Previous
                 </button>
 
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {currentScreenIndex + 1} / {lessonScreens.length}
-                  </span>
+                <div className="flex items-center gap-1">
                   <button
                     onClick={() => navigate(`/course/${courseId}`)}
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    aria-label="Course outline"
+                    className="flex items-center justify-center w-11 h-11 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                     title="Course outline"
                   >
                     <BookOpen className="w-5 h-5" />
                   </button>
                   <button
                     onClick={handleToggleNotes}
-                    className={`p-2 rounded-lg transition-colors ${
+                    aria-label="Toggle notes"
+                    aria-pressed={isNotesOpen}
+                    className={`flex items-center justify-center w-11 h-11 rounded-lg transition-colors ${
                       isNotesOpen
                         ? "bg-azure-500 text-white"
                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1391,21 +1404,38 @@ export const CoursePlayer = () => {
                   </button>
                 </div>
 
-                <button
-                  onClick={
-                    isLastScreen ? handleCompleteLesson : handleNextMiniLesson
-                  }
-                  disabled={nextButtonDisabled}
-                  className="flex items-center gap-2 px-6 py-2 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-                >
-                  {nextButtonLabel}
-                  <ChevronRight className="w-5 h-5" />
-                </button>
+                {isLastScreen ? (
+                  <button
+                    onClick={handleCompleteLesson}
+                    disabled={nextButtonDisabled}
+                    aria-label={nextButtonLabel}
+                    className="shrink-0 flex items-center gap-2 px-4 h-11 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm font-medium"
+                  >
+                    <CheckCircle className="w-5 h-5 shrink-0" />
+                    <span className="whitespace-nowrap">
+                      {lessonCompletionStatus === "submitting"
+                        ? "Completing…"
+                        : lessonCompletionStatus === "success" ||
+                          lessonCompletionStatus === "queued"
+                        ? "Completed"
+                        : "Complete"}
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleNextMiniLesson}
+                    disabled={nextButtonDisabled}
+                    aria-label="Next screen"
+                    className="shrink-0 flex items-center justify-center w-11 h-11 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                )}
               </div>
               {isLastScreen &&
                 lessonCompletionStatus === "error" &&
                 lessonCompletionError && (
-                  <p className="mt-3 text-sm text-red-600 dark:text-red-400">
+                  <p className="px-3 pb-2 text-sm text-red-600 dark:text-red-400">
                     {lessonCompletionError}
                   </p>
                 )}
