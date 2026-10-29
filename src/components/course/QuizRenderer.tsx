@@ -47,32 +47,36 @@ const mapQuizType = (quizType?: Quiz["quiz_type"]): QuizQuestionType => {
   }
 };
 
+// The backend's `correct_answer` is an array of the literal option TEXT
+// (docs/STUDENT_API_PAYLOADS.md §25/26 — e.g.
+// `correct_answer: ["A container for storing data values"]`, matching an
+// entry in `options` verbatim), not an index. Option ids must therefore be
+// the option's own text so a submitted answer can ever equal `correct_answer`
+// — using stringified array indices here previously made every MCQ/true-false
+// submission compare an index ("0") against text and always fail.
 const normaliseOptions = (
   quiz: Quiz,
   question: QuizQuestion
 ): QuizOption[] | undefined => {
-  // If question.options exist, rebuild IDs as indices to align with correct_answer index array
   if (question.options && question.options.length > 0) {
-    return question.options.map((opt, idx) => ({
-      id: String(idx),
+    return question.options.map((opt) => ({
+      id: opt.text,
       text: opt.text,
       hint: opt.hint,
     }));
   }
 
-  // If quiz-level options exist, map to index-based ids
   if (quiz.options && quiz.options.length > 0) {
-    return quiz.options.map((option, idx) => ({
-      id: String(idx),
+    return quiz.options.map((option) => ({
+      id: option,
       text: option,
     }));
   }
 
-  // True/False fallback uses index-based ids to match ["0","1"] answers if provided
   if (quiz.quiz_type === "true_false") {
     return [
-      { id: "0", text: "True" },
-      { id: "1", text: "False" },
+      { id: "True", text: "True" },
+      { id: "False", text: "False" },
     ];
   }
 

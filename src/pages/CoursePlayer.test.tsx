@@ -94,7 +94,9 @@ const lessonDetail: LessonDetail = {
       question: "What is 1/2 + 1/2?",
       order_index: 0,
       options: ["1", "2", "1/2"],
-      correct_answer: ["0"],
+      // The real backend's correct_answer is the option TEXT, not an index
+      // (docs/STUDENT_API_PAYLOADS.md §25/26) — see QuizRenderer.tsx.
+      correct_answer: ["1"],
     },
   ],
 };
@@ -116,6 +118,7 @@ const courseDetail: CourseDetail = {
           title: "Fractions Basics",
           description: "",
           order_index: 1,
+          quizzes: [{ id: 900, order_index: 0 }],
         },
       ],
     },
@@ -251,6 +254,106 @@ describe("CoursePlayer — quiz gating", () => {
     expect(updateCourseProgress).not.toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ lesson_id: expect.anything() })
+    );
+  });
+});
+
+describe("CoursePlayer — already-completed lesson", () => {
+  it("skips re-submitting lesson completion to the backend and shows an 'already completed' modal instead", async () => {
+    // This lesson is the only one in the course, so lessons_completed: 1
+    // means the server already has it marked done.
+    vi.mocked(getCourseProgress).mockResolvedValue({
+      ...courseProgress,
+      lessons_completed: 1,
+    });
+
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await screen.findByText("What is 1/2 + 1/2?");
+
+    // Quiz gating is unchanged — still has to be answered to unlock Complete.
+    await user.click(screen.getByRole("radio", { name: "1" }));
+    await user.click(screen.getByRole("button", { name: /submit quiz/i }));
+
+    const completeButton = await waitFor(() => {
+      const button = screen.getByRole("button", { name: "Complete Lesson" });
+      expect(button).not.toBeDisabled();
+      return button;
+    });
+
+    await user.click(completeButton);
+
+    expect(
+      await screen.findByText("Lesson Already Completed")
+    ).toBeInTheDocument();
+
+    // Quiz-progress sync is unaffected (still a real network call)...
+    expect(updateCourseProgress).toHaveBeenCalledWith(
+      "7",
+      expect.objectContaining({ quiz_id: 900, completed: true })
+    );
+    // ...but lesson completion must never be re-submitted for an
+    // already-completed lesson.
+    expect(updateCourseProgress).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ lesson_id: expect.anything() })
+    );
+  });
+});
+
+describe("CoursePlayer — already-completed quiz", () => {
+  it("skips re-submitting quiz progress for an already-completed quiz, still unlocks Complete, and leaves lesson completion (a separate, not-yet-completed thing in this fixture) unaffected", async () => {
+    // quizzes_completed: 1 means the server already has this course's one
+    // quiz marked done; lessons_completed stays 0 so the lesson-completion
+    // skip path (tested separately above) does NOT also kick in here.
+    vi.mocked(getCourseProgress).mockResolvedValue({
+      ...courseProgress,
+      quizzes_completed: 1,
+    });
+
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await screen.findByText("What is 1/2 + 1/2?");
+
+    await user.click(screen.getByRole("radio", { name: "1" }));
+    await user.click(screen.getByRole("button", { name: /submit quiz/i }));
+
+    expect(
+      await screen.findByText(
+        "This quiz is already completed — your earlier result still counts."
+      )
+    ).toBeInTheDocument();
+
+    // Complete still unlocks from the already-completed state, without a
+    // network round trip.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Complete Lesson" })
+      ).not.toBeDisabled()
+    );
+
+    expect(updateCourseProgress).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ quiz_id: 900 })
+    );
+
+    // Lesson completion itself is a separate, independent skip path — since
+    // this fixture's lesson is NOT already completed, clicking Complete must
+    // still submit it normally.
+    await user.click(screen.getByRole("button", { name: "Complete Lesson" }));
+    await waitFor(() =>
+      expect(updateCourseProgress).toHaveBeenCalledWith(
+        "7",
+        expect.objectContaining({ lesson_id: 501, completed: true })
+      )
     );
   });
 });

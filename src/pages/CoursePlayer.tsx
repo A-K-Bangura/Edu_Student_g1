@@ -71,13 +71,19 @@ export const CoursePlayer = () => {
         result?: QuizResult;
         error?: string;
         attempt?: QuizAttemptMeta;
-        progressStatus: "idle" | "updating" | "success" | "queued" | "error";
+        progressStatus:
+          | "idle"
+          | "updating"
+          | "success"
+          | "queued"
+          | "error"
+          | "already_completed";
         progressError?: string;
       }
     >
   >({});
   const [lessonCompletionStatus, setLessonCompletionStatus] = useState<
-    "idle" | "submitting" | "success" | "queued" | "error"
+    "idle" | "submitting" | "success" | "queued" | "error" | "already_completed"
   >("idle");
   const [lessonCompletionError, setLessonCompletionError] = useState<
     string | null
@@ -412,20 +418,29 @@ export const CoursePlayer = () => {
     (!currentQuizState ||
       currentQuizState.status !== "success" ||
       (currentQuizState.progressStatus !== "success" &&
-        currentQuizState.progressStatus !== "queued"));
+        currentQuizState.progressStatus !== "queued" &&
+        currentQuizState.progressStatus !== "already_completed"));
   const canGoPrev = currentScreenIndex > 0;
   const canGoNext = currentScreenIndex < totalScreens - 1;
+  // Server already has this lesson marked complete (derived from
+  // GET .../progress, same source the outline's lock/checkmark state uses) —
+  // re-clicking "Complete Lesson" on a review visit must not re-submit.
+  const isCurrentLessonAlreadyCompleted = activeLessonId
+    ? completedLessonIds.has(activeLessonId)
+    : false;
   const nextButtonDisabled = isLastScreen
     ? lessonCompletionStatus === "submitting" ||
       lessonCompletionStatus === "success" ||
       lessonCompletionStatus === "queued" ||
+      lessonCompletionStatus === "already_completed" ||
       isQuizNextLocked
     : !canGoNext || isQuizNextLocked;
   const nextButtonLabel = isLastScreen
     ? lessonCompletionStatus === "submitting"
       ? "Completing..."
       : lessonCompletionStatus === "success" ||
-        lessonCompletionStatus === "queued"
+        lessonCompletionStatus === "queued" ||
+        lessonCompletionStatus === "already_completed"
       ? "Lesson Completed"
       : "Complete Lesson"
     : "Next";
@@ -617,6 +632,25 @@ export const CoursePlayer = () => {
         meta,
       });
 
+      if (completedQuizIds.has(quizId)) {
+        // Server already has this quiz marked complete — don't re-submit on
+        // every review/retry (would re-award XP and burn an offline-queue
+        // slot for nothing). Still shows the local correct/incorrect result.
+        debugLog("CoursePlayer", "Quiz already completed, skipping sync", {
+          quizId,
+        });
+        setQuizStates((prev) => ({
+          ...prev,
+          [quizId]: {
+            status: "success",
+            result,
+            attempt: meta,
+            progressStatus: "already_completed",
+          },
+        }));
+        return;
+      }
+
       setQuizStates((prev) => ({
         ...prev,
         [quizId]: {
@@ -798,6 +832,18 @@ export const CoursePlayer = () => {
 
     const progressStatus = quizState.progressStatus;
 
+    if (progressStatus === "already_completed") {
+      blocks.push(
+        <div
+          key="progress-already-completed"
+          className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-3 text-sm text-green-700 dark:text-green-300"
+        >
+          <CheckCircle className="w-5 h-5 shrink-0" />
+          <span>This quiz is already completed — your earlier result still counts.</span>
+        </div>
+      );
+    }
+
     if (progressStatus === "updating") {
       blocks.push(
         <div
@@ -934,8 +980,18 @@ export const CoursePlayer = () => {
 
     if (
       lessonCompletionStatus === "success" ||
-      lessonCompletionStatus === "queued"
+      lessonCompletionStatus === "queued" ||
+      lessonCompletionStatus === "already_completed"
     ) {
+      setShowCompletionModal(true);
+      return;
+    }
+
+    if (isCurrentLessonAlreadyCompleted) {
+      // Don't re-POST completion for a lesson the server already has marked
+      // done — every review/retry visit would otherwise re-submit, which
+      // could re-award XP/coins and burns an offline-queue slot for nothing.
+      setLessonCompletionStatus("already_completed");
       setShowCompletionModal(true);
       return;
     }
@@ -1270,26 +1326,6 @@ export const CoursePlayer = () => {
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
-          {/* Screen-position progress bar — NOT lesson/course completion.
-              Reaching the end here must never imply the lesson is complete. */}
-          {hasScreens && (
-            <div
-              role="progressbar"
-              aria-label="Lesson progress"
-              aria-valuemin={1}
-              aria-valuemax={totalScreens}
-              aria-valuenow={currentScreenIndex + 1}
-              className="h-1 w-full shrink-0 bg-gray-200 dark:bg-gray-700"
-            >
-              <div
-                className="h-full bg-azure-500 transition-[width] duration-300"
-                style={{
-                  width: `${((currentScreenIndex + 1) / totalScreens) * 100}%`,
-                }}
-              />
-            </div>
-          )}
-
           {/* Header */}
           <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center gap-4">
             <button
@@ -1324,8 +1360,28 @@ export const CoursePlayer = () => {
             </div>
           </div>
 
+          {/* Screen-position progress bar — NOT lesson/course completion.
+              Reaching the end here must never imply the lesson is complete. */}
+          {hasScreens && (
+            <div
+              role="progressbar"
+              aria-label="Lesson progress"
+              aria-valuemin={1}
+              aria-valuemax={totalScreens}
+              aria-valuenow={currentScreenIndex + 1}
+              className="h-1 w-full shrink-0 bg-gray-200 dark:bg-gray-700"
+            >
+              <div
+                className="h-full bg-green-500 transition-[width] duration-300"
+                style={{
+                  width: `${((currentScreenIndex + 1) / totalScreens) * 100}%`,
+                }}
+              />
+            </div>
+          )}
+
           {/* Mini-Lesson and Quiz Content */}
-          <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 px-4 py-4 md:px-8 md:py-8">
+          <div className="flex-1 overflow-y-auto overscroll-contain bg-white dark:bg-gray-900 px-4 py-4 md:px-8 md:py-8">
             <div className="max-w-3xl mx-auto space-y-6 pb-6">
               {currentScreen ? (
                 currentScreen.kind === "mini" ? (
@@ -1416,7 +1472,8 @@ export const CoursePlayer = () => {
                       {lessonCompletionStatus === "submitting"
                         ? "Completing…"
                         : lessonCompletionStatus === "success" ||
-                          lessonCompletionStatus === "queued"
+                          lessonCompletionStatus === "queued" ||
+                          lessonCompletionStatus === "already_completed"
                         ? "Completed"
                         : "Complete"}
                     </span>
@@ -1608,6 +1665,47 @@ export const CoursePlayer = () => {
                   : "Continue Learning"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {showCompletionModal && lessonCompletionStatus === "already_completed" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+          <div className="relative z-10 w-full md:max-w-md mx-auto px-6 py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/40 dark:border-gray-700 text-center">
+            <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              Lesson Already Completed
+            </h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              You've already completed this lesson — nice work reviewing it
+              again.
+            </p>
+            {courseProgress && (
+              <div className="mb-6 py-3 px-4 rounded-xl bg-gray-50 dark:bg-gray-800">
+                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Course Progress
+                </p>
+                <p className="text-lg font-semibold text-azure-600 dark:text-azure-400">
+                  {(() => {
+                    const raw =
+                      courseProgress.progress_percentage ??
+                      courseProgress.progress_percent ??
+                      0;
+                    const percent =
+                      typeof raw === "string" ? parseFloat(raw) : raw;
+                    return `${Math.round(percent)}%`;
+                  })()}
+                </p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleCompletionContinue}
+              className="w-full px-6 py-3 bg-linear-to-r from-azure-500 to-blue-violet-600 hover:from-azure-600 hover:to-blue-violet-600 text-white rounded-xl font-semibold shadow-lg transition-transform transform hover:-translate-y-0.5"
+            >
+              {isLastLessonInCourse ? "Finish" : "Continue Learning"}
+            </button>
           </div>
         </div>
       )}

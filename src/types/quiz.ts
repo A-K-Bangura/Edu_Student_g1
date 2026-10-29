@@ -1,4 +1,8 @@
 export type QuizType =
+  // The real backend sends "mcq" (docs/STUDENT_API_PAYLOADS.md §25/26), not
+  // "multiple_choice" — kept both since `mapQuizType`'s `default` already
+  // treats any unrecognised value as mcq, so this is for accuracy, not behavior.
+  | "mcq"
   | "multiple_choice"
   | "true_false"
   | "short_answer"
