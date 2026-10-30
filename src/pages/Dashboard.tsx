@@ -87,8 +87,8 @@ export const Dashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Total XP
@@ -108,7 +108,7 @@ export const Dashboard = () => {
             </p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-600 dark:text-gray-400">Streak</p>
               <div className="bg-gradient-to-br from-rose-500 to-amber-500 p-2 rounded-lg">
@@ -145,7 +145,7 @@ export const Dashboard = () => {
           />
           <button
             onClick={() => navigate("/wallet")}
-            className="relative text-left bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+            className="relative text-left bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
           >
             <ArrowUpRight
               strokeWidth={3}
