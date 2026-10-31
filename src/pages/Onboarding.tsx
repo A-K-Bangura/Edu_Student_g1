@@ -258,7 +258,9 @@ export const Onboarding = () => {
         onboardingData.university_id = data.university_id as number;
         onboardingData.faculty_id = data.faculty_id as number;
         onboardingData.department_id = data.department_id as number;
-        if (data.student_id) onboardingData.student_id = data.student_id;
+        // Required for regular levels — validated at step 2, so this is
+        // always non-empty by the time submit is reachable.
+        onboardingData.student_id = data.student_id as string;
       } else if (isSpecialLevel(level)) {
         // For UnderGrad/graduate: organization is optional
         if (data.organization_id) {
@@ -623,19 +625,24 @@ export const Onboarding = () => {
 
                     {/* Student ID */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Student ID
+                      <label
+                        htmlFor="onboarding-student-id"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                      >
+                        Student ID *
                       </label>
                       <div className="relative">
                         <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
+                          id="onboarding-student-id"
                           type="text"
                           value={formData.student_id || ""}
                           onChange={(e) =>
                             handleInputChange("student_id", e.target.value)
                           }
-                          placeholder="Enter your student ID (optional)"
+                          placeholder="Enter your student ID"
                           className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-azure-500 focus:border-transparent"
+                          required
                         />
                       </div>
                     </div>

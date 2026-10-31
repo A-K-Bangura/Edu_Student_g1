@@ -127,7 +127,11 @@ describe("resuming an interrupted onboarding", () => {
 
   it("returns to the password step with the password empty", async () => {
     const user = userEvent.setup();
-    seedAcademicDraft("acct-1", { department_id: 100 }, 3);
+    seedAcademicDraft(
+      "acct-1",
+      { department_id: 100, student_id: "STU2024001" },
+      3
+    );
     renderOnboarding();
     const password = screen.getByPlaceholderText("At least 8 characters");
     await user.type(password, "Sup3rSecret!");
@@ -212,7 +216,11 @@ describe("restored selections are revalidated against the live lists", () => {
         releaseDepartments = resolve;
       })
     );
-    seedAcademicDraft("acct-1", { department_id: 100 }, 3);
+    seedAcademicDraft(
+      "acct-1",
+      { department_id: 100, student_id: "STU2024001" },
+      3
+    );
     renderOnboarding();
 
     await user.type(screen.getByPlaceholderText("At least 8 characters"), "Sup3rSecret!");
@@ -232,6 +240,7 @@ describe("restored selections are revalidated against the live lists", () => {
         university_id: 1,
         faculty_id: 10,
         department_id: 100,
+        student_id: "STU2024001",
         level: "300",
         password: "Sup3rSecret!",
       })
@@ -439,5 +448,41 @@ describe("institution lists: failures and refreshing", () => {
     window.dispatchEvent(new Event("visibilitychange"));
 
     expect(await screen.findByRole("option", { name: "Mining Engineering" })).toBeInTheDocument();
+  });
+});
+
+describe("student ID is required for regular levels (100-500)", () => {
+  // docs/STUDENT_API_PAYLOADS.md's "Complete Onboarding" table documents
+  // student_id as required for these levels; the backend 422s without it.
+  // The form used to accept and silently submit without one.
+  it("blocks Next on Academic Details until a student ID is entered, then submits it", async () => {
+    const user = userEvent.setup();
+    mocks.completeOnboarding.mockResolvedValue({ user: {} });
+    seedAcademicDraft("acct-1", {
+      university_id: 1,
+      faculty_id: 10,
+      department_id: 100,
+    });
+    renderOnboarding();
+    await academicDetailsReady();
+
+    const next = screen.getByRole("button", { name: /Next/ });
+    expect(next).toBeDisabled();
+    expect(
+      screen.getByText("Please enter your student ID")
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Student ID *"), "STU2024001");
+    expect(next).toBeEnabled();
+
+    await user.click(next);
+    await user.type(screen.getByPlaceholderText("At least 8 characters"), "Sup3rSecret!");
+    await user.type(screen.getByPlaceholderText("Re-enter your password"), "Sup3rSecret!");
+    await user.click(screen.getByRole("button", { name: /Complete/ }));
+
+    expect(await screen.findByText("Dashboard page")).toBeInTheDocument();
+    expect(mocks.completeOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({ student_id: "STU2024001" })
+    );
   });
 });
