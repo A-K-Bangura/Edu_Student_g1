@@ -808,6 +808,8 @@ export const Onboarding = () => {
           kind={helpKind}
           onClose={() => setHelpKind(null)}
           supportNumber={supportNumber}
+          universityId={formData.university_id}
+          facultyId={formData.faculty_id}
           universityName={universityName}
           facultyName={facultyName}
           onOpenedWhatsApp={(kind, name) =>

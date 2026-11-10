@@ -105,6 +105,7 @@ const ResourcePurchases = lazy(() =>
     default: m.ResourcePurchases,
   }))
 );
+const Help = lazy(() => import("./pages/Help").then((m) => ({ default: m.Help })));
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -302,6 +303,14 @@ function App() {
                 element={
                   <ProtectedRoute requireOnboarding>
                     <Wallet />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/help"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <Help />
                   </ProtectedRoute>
                 }
               />

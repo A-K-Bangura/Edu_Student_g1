@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getOrganizations: vi.fn(),
   completeOnboarding: vi.fn(),
   getAuthProfile: vi.fn(),
+  getOnboardingHelpContact: vi.fn(),
 }));
 
 vi.mock("../config/env", () => ({ env: mocks.env }));
@@ -24,6 +25,9 @@ vi.mock("../services/onboarding", () => ({
 vi.mock("../services/auth", () => ({
   completeOnboarding: mocks.completeOnboarding,
   getAuthProfile: mocks.getAuthProfile,
+}));
+vi.mock("../services/guidance", () => ({
+  getOnboardingHelpContact: mocks.getOnboardingHelpContact,
 }));
 
 import { Onboarding } from "./Onboarding";
@@ -90,11 +94,22 @@ document.addEventListener("click", (e) => {
   if ((e.target as Element).closest("a")) e.preventDefault();
 });
 
+// jsdom's window.open always returns null (no real multi-window support), so
+// every test gets a controllable fake tab instead — the guidance dialog's
+// window.open(...)/pendingTab.location.href dance is asserted via `lastTab`,
+// never the real window.location.
+let lastTab: { location: { href: string }; opener: unknown; close: () => void } | null;
+
 beforeEach(() => {
   localStorage.clear();
   mocks.env.SUPPORT_WHATSAPP_NUMBER = "+232 76 123 456";
   Object.values(mocks).forEach((m) => {
     if (typeof m === "function") m.mockReset();
+  });
+  lastTab = null;
+  vi.spyOn(window, "open").mockImplementation(() => {
+    lastTab = { location: { href: "" }, opener: null, close: vi.fn() };
+    return lastTab as unknown as Window;
   });
   mocks.getUniversities.mockResolvedValue([FBC, NJALA]);
   mocks.getFaculties.mockImplementation(async (universityId: number) =>
@@ -103,6 +118,10 @@ beforeEach(() => {
   mocks.getDepartments.mockResolvedValue([CIVIL]);
   mocks.getOrganizations.mockResolvedValue([]);
   mocks.getAuthProfile.mockRejectedValue(new Error("offline"));
+  // Default: the guidance service is unreachable, so the dialog falls back to
+  // the env-configured number exactly as it did before Round 13 — most tests
+  // below exercise that fallback path and don't care about the new primary one.
+  mocks.getOnboardingHelpContact.mockRejectedValue(new Error("network"));
   signInPending();
 });
 
@@ -261,7 +280,7 @@ describe("Can't find your department? (WhatsApp support)", () => {
     expect(screen.getByRole("button", { name: "Can't find your department?" })).toBeInTheDocument();
   });
 
-  it("builds the encoded wa.me link, shows the parents, and changes nothing in the form", async () => {
+  it("tries the guidance service first, shows the parents, and changes nothing in the form", async () => {
     const user = userEvent.setup();
     mocks.getDepartments.mockResolvedValue([]);
     seedAcademicDraft();
@@ -278,7 +297,20 @@ describe("Can't find your department? (WhatsApp support)", () => {
     expect(within(dialog).getByRole("button", { name: "Continue to WhatsApp" })).toBeDisabled();
 
     await user.type(within(dialog).getByLabelText(/Name of your missing department/), "Mining Engineering");
-    const link = within(dialog).getByRole("link", { name: "Continue to WhatsApp" });
+    const button = within(dialog).getByRole("button", { name: "Continue to WhatsApp" });
+    expect(button).toBeEnabled();
+
+    await user.click(button);
+
+    // Tried the backend first, with whatever the student had picked so far.
+    expect(mocks.getOnboardingHelpContact).toHaveBeenCalledWith({
+      issue: "department",
+      university_id: 1,
+      faculty_id: 10,
+    });
+
+    // The service is unreachable in this test (default mock) — falls back to
+    // the exact same locally-built link as before Round 13.
     const expected = [
       "Hello UniVybe team. I'm completing my student onboarding, but I can't find my department.",
       "",
@@ -288,15 +320,15 @@ describe("Can't find your department? (WhatsApp support)", () => {
       "",
       "Please help me add it so I can complete my onboarding.",
     ].join("\n");
-    expect(link).toHaveAttribute("href", `https://wa.me/23276123456?text=${encodeURIComponent(expected)}`);
-    expect(link).toHaveAttribute("target", "_blank");
-    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
-    expect(link.getAttribute("href")).not.toMatch(/token|password|otp|acct-1/i);
-
-    await user.click(link);
+    await waitFor(() =>
+      expect(lastTab?.location.href).toBe(
+        `https://wa.me/23276123456?text=${encodeURIComponent(expected)}`
+      )
+    );
+    expect(lastTab?.location.href).not.toMatch(/token|password|otp|acct-1/i);
 
     // Opening WhatsApp is not "sent", and not "added".
-    expect(within(dialog).getByText(/nothing has been sent yet/i)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/nothing has been sent yet/i)).toBeInTheDocument();
     expect(mocks.completeOnboarding).not.toHaveBeenCalled();
     expect(localStorage.getItem("pending_auth_token")).toBe("token-acct-1");
 
@@ -308,6 +340,50 @@ describe("Can't find your department? (WhatsApp support)", () => {
     expect(
       screen.getByText("You asked support to add “Mining Engineering”. It isn't in the list yet.")
     ).toBeInTheDocument();
+  });
+
+  it("uses the guidance service's own contact when it answers — even with no env number configured", async () => {
+    const user = userEvent.setup();
+    mocks.env.SUPPORT_WHATSAPP_NUMBER = undefined;
+    mocks.getOnboardingHelpContact.mockResolvedValue({
+      routing: {
+        id: "r-1",
+        routed_at: "2026-11-10T14:03:00+00:00",
+        source: "onboarding",
+        category: {
+          id: 9,
+          key: "missing_department",
+          slug: "missing-department",
+          name: "Missing Department",
+          description: null,
+          required_context: "none",
+        },
+        context: { university: FBC, faculty: ENGINEERING, department: null },
+        contact_type: "central",
+        is_central_fallback: true,
+        is_repeat: false,
+      },
+      contact: {
+        type: "central",
+        name: "UniVybe Support",
+        whatsapp: { number: "+23276000111", url: "https://wa.me/23276000111?text=Hello%20there" },
+        message: "Hello there",
+      },
+      notice: "UniVybe has only shared this contact.",
+    });
+    seedAcademicDraft();
+    renderOnboarding();
+    await academicDetailsReady();
+
+    await user.click(screen.getByRole("button", { name: "Can't find your department?" }));
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText(/Name of your missing department/), "Mining Engineering");
+    await user.click(within(dialog).getByRole("button", { name: "Continue to WhatsApp" }));
+
+    await waitFor(() =>
+      expect(lastTab?.location.href).toBe("https://wa.me/23276000111?text=Hello%20there")
+    );
+    expect(await within(dialog).findByText(/nothing has been sent yet/i)).toBeInTheDocument();
   });
 
   it("closes on Escape and Cancel without side effects", async () => {
@@ -347,14 +423,16 @@ describe("Can't find your department? (WhatsApp support)", () => {
 
     await user.click(screen.getByRole("button", { name: "Can't find your university?" }));
     await user.type(screen.getByLabelText(/Name of your missing university/), "Example University");
-    const link = screen.getByRole("link", { name: "Continue to WhatsApp" });
-    const text = decodeURIComponent(link.getAttribute("href")!.split("?text=")[1]);
+    await user.click(screen.getByRole("button", { name: "Continue to WhatsApp" }));
+
+    await waitFor(() => expect(lastTab?.location.href).toBeTruthy());
+    const text = decodeURIComponent(lastTab!.location.href.split("?text=")[1]);
     expect(text).toContain("can't find my university.");
     expect(text).toContain("Missing university: Example University");
     expect(text).not.toContain("Faculty:");
   });
 
-  it("explains when WhatsApp support isn't configured instead of linking nowhere", async () => {
+  it("shows a plain failure message when neither the guidance service nor the env number is available", async () => {
     const user = userEvent.setup();
     mocks.env.SUPPORT_WHATSAPP_NUMBER = undefined;
     seedAcademicDraft();
@@ -363,9 +441,11 @@ describe("Can't find your department? (WhatsApp support)", () => {
 
     await user.click(screen.getByRole("button", { name: "Can't find your department?" }));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByRole("alert")).toHaveTextContent(/WhatsApp support isn't available/);
-    expect(within(dialog).queryByRole("link")).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole("button", { name: "Continue to WhatsApp" })).not.toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText(/Name of your missing department/), "Mining Engineering");
+    await user.click(within(dialog).getByRole("button", { name: "Continue to WhatsApp" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(/WhatsApp support isn't available/);
+    expect(lastTab?.location.href).toBe("");
   });
 });
 
@@ -416,7 +496,8 @@ describe("institution lists: failures and refreshing", () => {
 
     await user.click(screen.getByRole("button", { name: "Can't find your department?" }));
     await user.type(screen.getByLabelText(/Name of your missing department/), "Mining Engineering");
-    await user.click(screen.getByRole("link", { name: "Continue to WhatsApp" }));
+    await user.click(screen.getByRole("button", { name: "Continue to WhatsApp" }));
+    await screen.findByText(/nothing has been sent yet/i);
     await user.click(screen.getByRole("button", { name: "Done" }));
 
     const check = screen.getByRole("button", { name: "I've contacted support — check again" });
