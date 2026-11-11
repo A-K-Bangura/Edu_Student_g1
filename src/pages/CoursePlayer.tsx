@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CertificateCelebrationAction } from "../components/certificates/CertificateCelebrationAction";
+import { CERTIFICATES_QUERY_KEY } from "../hooks/useCertificateCollection";
 import { PageShell } from "../components/layout/PageShell";
 import { OutlineSidebar } from "../components/course/OutlineSidebar";
 import { MiniLessonRenderer } from "../components/course/MiniLessonRenderer";
@@ -1010,6 +1012,10 @@ export const CoursePlayer = () => {
       });
       // Roadmap progress and the current course derive from course completion.
       invalidateRoadmapQueries(queryClient);
+      if (course_completed) {
+        // A newly completed course joins the certificate collection.
+        queryClient.invalidateQueries({ queryKey: [CERTIFICATES_QUERY_KEY] });
+      }
       if (coins_awarded) {
         queryClient.invalidateQueries({ queryKey: ["wallet"] });
       }
@@ -1558,7 +1564,7 @@ export const CoursePlayer = () => {
             <div className="absolute bottom-0 right-0 w-32 h-32 bg-azure-500/30 rounded-full blur-3xl animate-pulse" />
             <div className="absolute top-1/3 right-1/4 w-20 h-20 bg-rose-500/30 rounded-full blur-3xl animate-pulse" />
           </div>
-          <div className="relative z-10 w-[92%] md:max-w-xl mx-auto px-6 py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/40 dark:border-gray-700">
+          <div className="relative z-10 w-[92%] md:max-w-xl mx-auto px-6 py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/40 dark:border-gray-700 max-h-[92dvh] overflow-y-auto">
           <div className="flex justify-center mb-6"> <video
             autoPlay
             loop
@@ -1653,6 +1659,14 @@ export const CoursePlayer = () => {
               <blockquote className="text-center italic text-gray-700 dark:text-gray-300 mb-6">
                 {inspirationMessage || "Keep going—you've got this!"}
               </blockquote>
+            )}
+            {courseId && (lessonCompletion?.courseCompleted || isLastLessonInCourse) && (
+              <div className="mb-3">
+                <CertificateCelebrationAction
+                  courseId={courseId}
+                  expectedComplete={!!lessonCompletion?.courseCompleted}
+                />
+              </div>
             )}
             <div className="flex flex-col sm:flex-row gap-3">
               <button
