@@ -47,32 +47,36 @@ const mapQuizType = (quizType?: Quiz["quiz_type"]): QuizQuestionType => {
   }
 };
 
+// The backend's `correct_answer` is an array of the literal option TEXT
+// (docs/STUDENT_API_PAYLOADS.md §25/26 — e.g.
+// `correct_answer: ["A container for storing data values"]`, matching an
+// entry in `options` verbatim), not an index. Option ids must therefore be
+// the option's own text so a submitted answer can ever equal `correct_answer`
+// — using stringified array indices here previously made every MCQ/true-false
+// submission compare an index ("0") against text and always fail.
 const normaliseOptions = (
   quiz: Quiz,
   question: QuizQuestion
 ): QuizOption[] | undefined => {
-  // If question.options exist, rebuild IDs as indices to align with correct_answer index array
   if (question.options && question.options.length > 0) {
-    return question.options.map((opt, idx) => ({
-      id: String(idx),
+    return question.options.map((opt) => ({
+      id: opt.text,
       text: opt.text,
       hint: opt.hint,
     }));
   }
 
-  // If quiz-level options exist, map to index-based ids
   if (quiz.options && quiz.options.length > 0) {
-    return quiz.options.map((option, idx) => ({
-      id: String(idx),
+    return quiz.options.map((option) => ({
+      id: option,
       text: option,
     }));
   }
 
-  // True/False fallback uses index-based ids to match ["0","1"] answers if provided
   if (quiz.quiz_type === "true_false") {
     return [
-      { id: "0", text: "True" },
-      { id: "1", text: "False" },
+      { id: "True", text: "True" },
+      { id: "False", text: "False" },
     ];
   }
 
@@ -286,38 +290,20 @@ export const QuizRenderer = ({
   const questionFeedback = feedback[currentQuestion.id];
 
   return (
-    <div className={className ?? "max-w-3xl mx-auto p-6"}>
-      {/* Progress Bar */}
-      {/* <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Question {currentQuestionIndex + 1} of {totalQuestions}
-          </h2>
-          <span className="text-sm text-gray-600 dark:text-gray-400">
-            {Math.round(progress)}% Complete
-          </span>
-        </div>
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div
-            className="bg-azure-500 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div> */}
-
-      {/* Question Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 border border-gray-200 dark:border-gray-700 mb-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+    <div className={className ?? ""}>
+      {/* Question */}
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           {currentQuestion.text}
         </h3>
 
         {/* Optional image under the question */}
         {quiz.image_url && (
-          <div className="mb-6">
+          <div className="mb-4">
             <img
               src={quiz.image_url}
               alt="Quiz illustration"
-              className="rounded-lg border border-gray-200 dark:border-gray-700 max-h-80 object-contain w-full"
+              className="rounded-lg max-h-80 object-contain w-full"
             />
           </div>
         )}
@@ -339,10 +325,10 @@ export const QuizRenderer = ({
                 return (
                   <label
                     key={option.id}
-                    className={`flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                    className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
                       isSelected
                         ? "border-azure-500 bg-azure-50 dark:border-azure-400/60 dark:bg-azure-900/30"
-                        : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        : "border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                     }`}
                   >
                     <input

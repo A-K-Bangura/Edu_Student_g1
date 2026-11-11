@@ -71,13 +71,19 @@ export const CoursePlayer = () => {
         result?: QuizResult;
         error?: string;
         attempt?: QuizAttemptMeta;
-        progressStatus: "idle" | "updating" | "success" | "queued" | "error";
+        progressStatus:
+          | "idle"
+          | "updating"
+          | "success"
+          | "queued"
+          | "error"
+          | "already_completed";
         progressError?: string;
       }
     >
   >({});
   const [lessonCompletionStatus, setLessonCompletionStatus] = useState<
-    "idle" | "submitting" | "success" | "queued" | "error"
+    "idle" | "submitting" | "success" | "queued" | "error" | "already_completed"
   >("idle");
   const [lessonCompletionError, setLessonCompletionError] = useState<
     string | null
@@ -412,20 +418,29 @@ export const CoursePlayer = () => {
     (!currentQuizState ||
       currentQuizState.status !== "success" ||
       (currentQuizState.progressStatus !== "success" &&
-        currentQuizState.progressStatus !== "queued"));
+        currentQuizState.progressStatus !== "queued" &&
+        currentQuizState.progressStatus !== "already_completed"));
   const canGoPrev = currentScreenIndex > 0;
   const canGoNext = currentScreenIndex < totalScreens - 1;
+  // Server already has this lesson marked complete (derived from
+  // GET .../progress, same source the outline's lock/checkmark state uses) —
+  // re-clicking "Complete Lesson" on a review visit must not re-submit.
+  const isCurrentLessonAlreadyCompleted = activeLessonId
+    ? completedLessonIds.has(activeLessonId)
+    : false;
   const nextButtonDisabled = isLastScreen
     ? lessonCompletionStatus === "submitting" ||
       lessonCompletionStatus === "success" ||
       lessonCompletionStatus === "queued" ||
+      lessonCompletionStatus === "already_completed" ||
       isQuizNextLocked
     : !canGoNext || isQuizNextLocked;
   const nextButtonLabel = isLastScreen
     ? lessonCompletionStatus === "submitting"
       ? "Completing..."
       : lessonCompletionStatus === "success" ||
-        lessonCompletionStatus === "queued"
+        lessonCompletionStatus === "queued" ||
+        lessonCompletionStatus === "already_completed"
       ? "Lesson Completed"
       : "Complete Lesson"
     : "Next";
@@ -617,6 +632,25 @@ export const CoursePlayer = () => {
         meta,
       });
 
+      if (completedQuizIds.has(quizId)) {
+        // Server already has this quiz marked complete — don't re-submit on
+        // every review/retry (would re-award XP and burn an offline-queue
+        // slot for nothing). Still shows the local correct/incorrect result.
+        debugLog("CoursePlayer", "Quiz already completed, skipping sync", {
+          quizId,
+        });
+        setQuizStates((prev) => ({
+          ...prev,
+          [quizId]: {
+            status: "success",
+            result,
+            attempt: meta,
+            progressStatus: "already_completed",
+          },
+        }));
+        return;
+      }
+
       setQuizStates((prev) => ({
         ...prev,
         [quizId]: {
@@ -798,6 +832,18 @@ export const CoursePlayer = () => {
 
     const progressStatus = quizState.progressStatus;
 
+    if (progressStatus === "already_completed") {
+      blocks.push(
+        <div
+          key="progress-already-completed"
+          className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-3 text-sm text-green-700 dark:text-green-300"
+        >
+          <CheckCircle className="w-5 h-5 shrink-0" />
+          <span>This quiz is already completed — your earlier result still counts.</span>
+        </div>
+      );
+    }
+
     if (progressStatus === "updating") {
       blocks.push(
         <div
@@ -934,8 +980,18 @@ export const CoursePlayer = () => {
 
     if (
       lessonCompletionStatus === "success" ||
-      lessonCompletionStatus === "queued"
+      lessonCompletionStatus === "queued" ||
+      lessonCompletionStatus === "already_completed"
     ) {
+      setShowCompletionModal(true);
+      return;
+    }
+
+    if (isCurrentLessonAlreadyCompleted) {
+      // Don't re-POST completion for a lesson the server already has marked
+      // done — every review/retry visit would otherwise re-submit, which
+      // could re-award XP/coins and burns an offline-queue slot for nothing.
+      setLessonCompletionStatus("already_completed");
       setShowCompletionModal(true);
       return;
     }
@@ -1186,8 +1242,8 @@ export const CoursePlayer = () => {
   // Show sequential access error if present
   if (sequentialAccessError && !isLoading) {
     return (
-      <PageShell showTopNav={false}>
-        <div className="flex justify-center items-center h-screen bg-gray-50 dark:bg-gray-900">
+      <PageShell showTopNav={false} showBottomNav={false}>
+        <div className="flex justify-center items-center h-dvh bg-gray-50 dark:bg-gray-900">
           <div className="max-w-2xl w-full mx-4">
             <div className="bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-lg shadow-lg p-8">
               <div className="flex items-start gap-4">
@@ -1245,8 +1301,8 @@ export const CoursePlayer = () => {
   // Loading state
   if (isLoading || !lessonContent) {
     return (
-      <PageShell showTopNav={false}>
-        <div className="flex justify-center items-center h-screen">
+      <PageShell showTopNav={false} showBottomNav={false}>
+        <div className="flex justify-center items-center h-dvh">
           <div className="animate-pulse text-gray-600 dark:text-gray-400">
             Loading lesson...
           </div>
@@ -1256,8 +1312,8 @@ export const CoursePlayer = () => {
   }
 
   return (
-    <PageShell showTopNav={false}>
-      <div className="flex h-screen overflow-hidden">
+    <PageShell showTopNav={false} showBottomNav={false}>
+      <div className="flex h-dvh overflow-hidden">
         {/* Outline Sidebar */}
         <OutlineSidebar
           outline={outline || { modules: [] }}
@@ -1271,64 +1327,72 @@ export const CoursePlayer = () => {
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* Header */}
-          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={toggleSidebar}
-                className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg relative"
-              >
-                <Menu
-                  className={`w-6 h-6 text-gray-600 dark:text-gray-400 transition-all duration-300 ${
-                    isSidebarOpen
-                      ? "opacity-0 rotate-90 scale-0"
-                      : "opacity-100 rotate-0 scale-100"
-                  }`}
-                />
-                <X
-                  className={`w-6 h-6 text-gray-600 dark:text-gray-400 absolute top-2 left-2 transition-all duration-300 ${
-                    isSidebarOpen
-                      ? "opacity-100 rotate-0 scale-100"
-                      : "opacity-0 rotate-90 scale-0"
-                  }`}
-                />
-              </button>
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {lessonContent.title}
-                </h1>
-                {currentModule && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {currentModule.title}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                {currentScreenIndex + 1} / {lessonScreens.length}
-              </span>
+          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center gap-4">
+            <button
+              onClick={toggleSidebar}
+              aria-label={isSidebarOpen ? "Close course outline" : "Open course outline"}
+              className="md:hidden shrink-0 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg relative"
+            >
+              <Menu
+                className={`w-6 h-6 text-gray-600 dark:text-gray-400 transition-all duration-300 ${
+                  isSidebarOpen
+                    ? "opacity-0 rotate-90 scale-0"
+                    : "opacity-100 rotate-0 scale-100"
+                }`}
+              />
+              <X
+                className={`w-6 h-6 text-gray-600 dark:text-gray-400 absolute top-2 left-2 transition-all duration-300 ${
+                  isSidebarOpen
+                    ? "opacity-100 rotate-0 scale-100"
+                    : "opacity-0 rotate-90 scale-0"
+                }`}
+              />
+            </button>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg font-semibold text-gray-900 dark:text-white break-words">
+                {lessonContent.title}
+              </h1>
+              {currentModule && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 break-words">
+                  {currentModule.title}
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Screen-position progress bar — NOT lesson/course completion.
+              Reaching the end here must never imply the lesson is complete. */}
+          {hasScreens && (
+            <div
+              role="progressbar"
+              aria-label="Lesson progress"
+              aria-valuemin={1}
+              aria-valuemax={totalScreens}
+              aria-valuenow={currentScreenIndex + 1}
+              className="h-1 w-full shrink-0 bg-gray-200 dark:bg-gray-700"
+            >
+              <div
+                className="h-full bg-green-500 transition-[width] duration-300"
+                style={{
+                  width: `${((currentScreenIndex + 1) / totalScreens) * 100}%`,
+                }}
+              />
+            </div>
+          )}
+
           {/* Mini-Lesson and Quiz Content */}
-          <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 p-4 md:p-8">
-            <div className="max-w-3xl mx-auto space-y-6">
+          <div className="flex-1 overflow-y-auto overscroll-contain bg-white dark:bg-gray-900 px-4 py-4 md:px-8 md:py-8">
+            <div className="max-w-3xl mx-auto space-y-6 pb-6">
               {currentScreen ? (
                 currentScreen.kind === "mini" ? (
                   <MiniLessonRenderer miniLesson={currentScreen.data} />
                 ) : currentQuiz ? (
-                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-                    <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Lesson Quiz
-                      </h2>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Complete this quiz to solidify what you just learned.
-                      </p>
-                    </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">
+                      Quick check
+                    </p>
                     <QuizRenderer
-                      className="p-6"
+                      className=""
                       quiz={currentQuiz}
                       onSubmit={(submission, meta) =>
                         handleQuizSubmit(currentQuiz.id, submission, meta)
@@ -1338,49 +1402,54 @@ export const CoursePlayer = () => {
                       }
                     />
                     {currentQuizFeedback && (
-                      <div className="px-6 pb-6">{currentQuizFeedback}</div>
+                      <div className="mt-2">{currentQuizFeedback}</div>
                     )}
                   </div>
                 ) : (
-                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center text-sm text-gray-600 dark:text-gray-400">
+                  <div className="text-center text-sm text-gray-600 dark:text-gray-400">
                     Select a lesson from the outline to begin.
                   </div>
                 )
               ) : (
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center text-sm text-gray-600 dark:text-gray-400">
+                <div className="text-center text-sm text-gray-600 dark:text-gray-400">
                   Select a lesson from the outline to begin.
                 </div>
               )}
             </div>
           </div>
 
-          {/* Navigation Controls */}
+          {/* Lesson toolbar */}
           {hasScreens && (
             <>
-              <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
+              <div
+                className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-3 py-2 flex items-center justify-between gap-2"
+                style={{
+                  paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
+                }}
+              >
                 <button
                   onClick={handlePrevMiniLesson}
                   disabled={!canGoPrev}
-                  className="flex items-center gap-2 px-6 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+                  aria-label="Previous screen"
+                  className="shrink-0 flex items-center justify-center w-11 h-11 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
                 >
                   <ChevronLeft className="w-5 h-5" />
-                  Previous
                 </button>
 
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {currentScreenIndex + 1} / {lessonScreens.length}
-                  </span>
+                <div className="flex items-center gap-1">
                   <button
                     onClick={() => navigate(`/course/${courseId}`)}
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    aria-label="Course outline"
+                    className="flex items-center justify-center w-11 h-11 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                     title="Course outline"
                   >
                     <BookOpen className="w-5 h-5" />
                   </button>
                   <button
                     onClick={handleToggleNotes}
-                    className={`p-2 rounded-lg transition-colors ${
+                    aria-label="Toggle notes"
+                    aria-pressed={isNotesOpen}
+                    className={`flex items-center justify-center w-11 h-11 rounded-lg transition-colors ${
                       isNotesOpen
                         ? "bg-azure-500 text-white"
                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1391,21 +1460,39 @@ export const CoursePlayer = () => {
                   </button>
                 </div>
 
-                <button
-                  onClick={
-                    isLastScreen ? handleCompleteLesson : handleNextMiniLesson
-                  }
-                  disabled={nextButtonDisabled}
-                  className="flex items-center gap-2 px-6 py-2 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-                >
-                  {nextButtonLabel}
-                  <ChevronRight className="w-5 h-5" />
-                </button>
+                {isLastScreen ? (
+                  <button
+                    onClick={handleCompleteLesson}
+                    disabled={nextButtonDisabled}
+                    aria-label={nextButtonLabel}
+                    className="shrink-0 flex items-center gap-2 px-4 h-11 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm font-medium"
+                  >
+                    <CheckCircle className="w-5 h-5 shrink-0" />
+                    <span className="whitespace-nowrap">
+                      {lessonCompletionStatus === "submitting"
+                        ? "Completing…"
+                        : lessonCompletionStatus === "success" ||
+                          lessonCompletionStatus === "queued" ||
+                          lessonCompletionStatus === "already_completed"
+                        ? "Completed"
+                        : "Complete"}
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleNextMiniLesson}
+                    disabled={nextButtonDisabled}
+                    aria-label="Next screen"
+                    className="shrink-0 flex items-center justify-center w-11 h-11 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                )}
               </div>
               {isLastScreen &&
                 lessonCompletionStatus === "error" &&
                 lessonCompletionError && (
-                  <p className="mt-3 text-sm text-red-600 dark:text-red-400">
+                  <p className="px-3 pb-2 text-sm text-red-600 dark:text-red-400">
                     {lessonCompletionError}
                   </p>
                 )}
@@ -1578,6 +1665,47 @@ export const CoursePlayer = () => {
                   : "Continue Learning"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {showCompletionModal && lessonCompletionStatus === "already_completed" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+          <div className="relative z-10 w-full md:max-w-md mx-auto px-6 py-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-white/40 dark:border-gray-700 text-center">
+            <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              Lesson Already Completed
+            </h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              You've already completed this lesson — nice work reviewing it
+              again.
+            </p>
+            {courseProgress && (
+              <div className="mb-6 py-3 px-4 rounded-xl bg-gray-50 dark:bg-gray-800">
+                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Course Progress
+                </p>
+                <p className="text-lg font-semibold text-azure-600 dark:text-azure-400">
+                  {(() => {
+                    const raw =
+                      courseProgress.progress_percentage ??
+                      courseProgress.progress_percent ??
+                      0;
+                    const percent =
+                      typeof raw === "string" ? parseFloat(raw) : raw;
+                    return `${Math.round(percent)}%`;
+                  })()}
+                </p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleCompletionContinue}
+              className="w-full px-6 py-3 bg-linear-to-r from-azure-500 to-blue-violet-600 hover:from-azure-600 hover:to-blue-violet-600 text-white rounded-xl font-semibold shadow-lg transition-transform transform hover:-translate-y-0.5"
+            >
+              {isLastLessonInCourse ? "Finish" : "Continue Learning"}
+            </button>
           </div>
         </div>
       )}

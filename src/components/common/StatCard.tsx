@@ -16,7 +16,7 @@ export const StatCard = ({
   subtitle,
 }: StatCardProps) => {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm text-gray-600 dark:text-gray-400">{title}</p>
         <div className={`${color} p-2 rounded-lg`}>

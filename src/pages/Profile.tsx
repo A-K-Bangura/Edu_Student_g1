@@ -22,6 +22,7 @@ import {
   Coins,
   ArrowUpRight,
   ChevronRight,
+  HelpCircle,
 } from "lucide-react";
 import { getUserProfile, updateProfile } from "../services/profile";
 import { uploadAvatar } from "../services/upload";
@@ -648,6 +649,23 @@ export const Profile = () => {
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     See student rankings
+                  </p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
+              </Link>
+              <Link
+                to="/help"
+                className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <div className="bg-gradient-to-br from-azure-500 to-blue-violet-500 p-2.5 rounded-lg shrink-0">
+                  <HelpCircle className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    Get Help
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Connect with a UniVybe guide on WhatsApp
                   </p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />

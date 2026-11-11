@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import { StatCard } from "../components/common/StatCard";
 import { CourseCard } from "../components/course/CourseCard";
+import { Mascot } from "../components/common/Mascot";
 import {
   Trophy,
   Flame,
@@ -16,6 +17,16 @@ import { XPCounter } from "../components/common/XPCounter";
 import { StreakIndicator } from "../components/common/StreakIndicator";
 import { getDashboard, getEnrolledCourses } from "../services/dashboard";
 import { getRecommendedCourses } from "../services/courses";
+
+// WhatsApp's own mark (not a lucide icon) — this button hands the student
+// off to a real WhatsApp conversation, so it carries WhatsApp's own green and
+// glyph rather than a generic chat icon.
+const WhatsAppIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+    <path d="M12.004 2C6.48 2 2 6.477 2 12c0 1.76.46 3.483 1.33 4.996L2 22l5.125-1.345A9.96 9.96 0 0 0 12.004 22C17.52 22 22 17.523 22 12S17.52 2 12.004 2Zm0 18.065a8.04 8.04 0 0 1-4.097-1.118l-.294-.175-3.04.798.812-2.965-.192-.304A8.04 8.04 0 1 1 20.06 12c0 4.44-3.613 8.065-8.056 8.065Z" />
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347Z" />
+  </svg>
+);
 
 export const Dashboard = () => {
   const navigate = useNavigate();
@@ -87,8 +98,8 @@ export const Dashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Total XP
@@ -108,7 +119,7 @@ export const Dashboard = () => {
             </p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-600 dark:text-gray-400">Streak</p>
               <div className="bg-gradient-to-br from-rose-500 to-amber-500 p-2 rounded-lg">
@@ -145,7 +156,7 @@ export const Dashboard = () => {
           />
           <button
             onClick={() => navigate("/wallet")}
-            className="relative text-left bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+            className="relative text-left bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
           >
             <ArrowUpRight
               strokeWidth={3}
@@ -255,6 +266,51 @@ export const Dashboard = () => {
             </div>
           </div>
         )}
+
+        {/* Get Help */}
+        <button
+          onClick={() => navigate("/help")}
+          className="group relative mb-8 w-full cursor-pointer overflow-hidden rounded-2xl bg-gradient-to-br from-azure-500 via-azure-500 to-rose-500 p-5 text-left shadow-lg transition-shadow hover:shadow-2xl sm:p-8 lg:p-10"
+        >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -right-12 -top-14 h-48 w-48 rounded-full bg-aquamarine-400/40 blur-3xl lg:h-64 lg:w-64"
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -bottom-16 left-1/4 h-40 w-40 rounded-full bg-amber-400/30 blur-3xl lg:h-56 lg:w-56"
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute right-1/4 top-0 h-28 w-28 rounded-full bg-white/15 blur-2xl"
+          />
+
+          <div className="relative flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:text-left">
+            <div className="min-w-0 order-2 sm:order-1">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
+                Get Help
+              </span>
+              <h2 className="mt-3 text-xl font-extrabold text-white sm:text-2xl lg:text-3xl">
+                Stuck on something? We've got your back.
+              </h2>
+              <p className="mt-1.5 max-w-md text-sm text-white/80 sm:text-base lg:text-lg">
+                Get connected to a UniVybe guide on WhatsApp — admissions,
+                registration, campus life, anything.
+              </p>
+              <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#25D366] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:bg-[#1EBE57] group-hover:shadow-md">
+                <WhatsAppIcon className="h-4 w-4" />
+                Get Help
+              </span>
+            </div>
+
+            <div className="order-1 shrink-0 sm:order-2">
+              <Mascot
+                pose="hi"
+                className="h-24 w-auto drop-shadow-xl sm:h-32 md:h-40 lg:h-52 xl:h-60"
+              />
+            </div>
+          </div>
+        </button>
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -36,6 +36,12 @@ export const stepFieldMessage = (
       if (!data.university_id) return "Please select a university";
       if (!data.faculty_id) return "Please select a faculty";
       if (!data.department_id) return "Please select a department";
+      // Required by the backend for levels 100-500 (docs/STUDENT_API_PAYLOADS.md
+      // "Complete Onboarding" request fields) even though the form used to
+      // label it "(optional)" — omitting it was a silent 422 at final submit.
+      if (!data.student_id || !data.student_id.trim()) {
+        return "Please enter your student ID";
+      }
     } else if (!isSpecialLevel(data.level)) {
       return "Please select your level";
     }

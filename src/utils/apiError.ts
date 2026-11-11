@@ -178,6 +178,16 @@ export class ApiError extends Error {
       case "GIG_CAPACITY_REACHED":
         return "Raise the applicant limit, or switch to open interest, before reopening.";
 
+      case "GUIDANCE_RATE_LIMITED": {
+        const limit = this.details?.limit;
+        return typeof limit === "number"
+          ? `You've asked for guidance ${limit} times in the last 24 hours, which is today's limit. Please try again tomorrow.`
+          : "You've reached today's guidance request limit. Please try again tomorrow.";
+      }
+
+      case "GUIDANCE_CONTACT_UNAVAILABLE":
+        return "No guidance contact is available right now. Please try again later.";
+
       default:
         return this.message || "An error occurred. Please try again.";
     }
