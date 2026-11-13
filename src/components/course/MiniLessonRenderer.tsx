@@ -1,11 +1,15 @@
 import { useMemo, useRef, useState, type ReactElement } from "react";
 import katex from "katex";
+import type { AxiosError } from "axios";
 import type {
   MiniLesson,
   MiniLessonBlock,
   MiniLessonBlockContentType,
   MiniLessonTextType,
 } from "../../types/lesson";
+import type { ApiResponse } from "../../types";
+import { getAudioBlockPlaybackUrl } from "../../services/lessons";
+import { ApiError } from "../../utils/apiError";
 import {
   FileText,
   // Image as ImageIcon,
@@ -17,6 +21,9 @@ import {
   ExternalLink,
   Copy,
   Check,
+  Play,
+  Loader2,
+  Headphones,
 } from "lucide-react";
 
 interface MiniLessonRendererProps {
@@ -461,6 +468,149 @@ const DocumentBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => (
   </div>
 );
 
+const AUDIO_PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2] as const;
+
+const formatAudioDuration = (totalSeconds: number): string => {
+  const seconds = Math.max(0, Math.round(totalSeconds));
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds % 60;
+  return `${minutes}:${remaining.toString().padStart(2, "0")}`;
+};
+
+const getAudioMeta = (mediaMetadata: Record<string, unknown> | null | undefined) => ({
+  title: typeof mediaMetadata?.title === "string" ? mediaMetadata.title : null,
+  durationSeconds:
+    typeof mediaMetadata?.duration_seconds === "number"
+      ? mediaMetadata.duration_seconds
+      : null,
+  format: typeof mediaMetadata?.format === "string" ? mediaMetadata.format : null,
+});
+
+// Audio blocks never carry a direct URL (docs/AUDIO_BLOCKS_API.md): a playable
+// link is only ever fetched on an explicit tap, never on mini-lesson open,
+// and a fresh one is fetched every time playback starts rather than reusing
+// a previous (short-lived) link.
+const AudioBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => {
+  const { title, durationSeconds, format } = getAudioMeta(block.media_metadata);
+  const [status, setStatus] = useState<"idle" | "loading" | "playing" | "error">(
+    "idle"
+  );
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [rate, setRate] = useState<(typeof AUDIO_PLAYBACK_RATES)[number]>(1);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const handlePlay = async () => {
+    setStatus("loading");
+    setErrorMessage(null);
+    try {
+      const { playback_url } = await getAudioBlockPlaybackUrl(block.id);
+      setPlaybackUrl(playback_url);
+      setStatus("playing");
+    } catch (error) {
+      let message = "Couldn't load this recording. Please try again.";
+      if (error && typeof error === "object" && "response" in error) {
+        message = ApiError.fromAxiosError(
+          error as AxiosError<ApiResponse>
+        ).getUserFriendlyMessage();
+      }
+      setErrorMessage(message);
+      setStatus("error");
+    }
+  };
+
+  // Drop the link once the recording finishes, so pressing play again fetches
+  // a fresh one rather than reusing a now-stale short-lived URL.
+  const handleEnded = () => {
+    setPlaybackUrl(null);
+    setStatus("idle");
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/60">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-azure-500 text-white">
+          {status === "loading" ? (
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+          ) : (
+            <Headphones className="h-5 w-5" aria-hidden />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+            {title || "Audio"}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {durationSeconds !== null
+              ? formatAudioDuration(durationSeconds)
+              : "Voice note"}
+            {format ? ` · ${format.toUpperCase()}` : ""}
+          </p>
+        </div>
+
+        {status !== "playing" && (
+          <button
+            type="button"
+            onClick={() => void handlePlay()}
+            disabled={status === "loading"}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-azure-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-azure-600 disabled:opacity-60"
+          >
+            <Play className="h-4 w-4" aria-hidden />
+            {status === "loading" ? "Loading…" : "Play"}
+          </button>
+        )}
+      </div>
+
+      {status === "error" && errorMessage && (
+        <p className="mt-3 text-sm text-rose-600 dark:text-rose-400">
+          {errorMessage}
+        </p>
+      )}
+
+      {status === "playing" && playbackUrl && (
+        <div className="mt-3 space-y-2">
+          {/* Fetched from an explicit tap above, never on open — autoplaying
+              here just starts the recording the student already asked for. */}
+          <audio
+            ref={audioRef}
+            src={playbackUrl}
+            controls
+            autoPlay
+            onEnded={handleEnded}
+            onLoadedMetadata={() => {
+              if (audioRef.current) audioRef.current.playbackRate = rate;
+            }}
+            className="w-full"
+          >
+            Your browser does not support the audio tag.
+          </audio>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <span>Speed:</span>
+            {AUDIO_PLAYBACK_RATES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => {
+                  setRate(r);
+                  if (audioRef.current) audioRef.current.playbackRate = r;
+                }}
+                aria-pressed={rate === r}
+                className={`rounded-full px-2 py-0.5 font-semibold transition-colors ${
+                  rate === r
+                    ? "bg-azure-500 text-white"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                }`}
+              >
+                {r}×
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const miniLessonFallbackAlt = (block: MiniLessonBlock): string =>
   block.content?.slice(0, 120) || "Mini lesson image";
 
@@ -512,6 +662,8 @@ export const MiniLessonRenderer = ({ miniLesson }: MiniLessonRendererProps) => {
         return <EmbedBlock block={block} />;
       case "document":
         return <DocumentBlock block={block} />;
+      case "audio":
+        return <AudioBlock block={block} />;
       default:
         return (
           <TextBlock

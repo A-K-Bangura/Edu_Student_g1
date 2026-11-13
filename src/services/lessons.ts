@@ -180,3 +180,21 @@ export const getMiniLessonDetail = async (
 
   return response.data.data.mini_lesson;
 };
+
+// Get a short-lived, authorised playback link for an audio block (Round 14).
+// The same enrollment check every other piece of course content requires —
+// call this fresh every time playback starts, never cache the link (it
+// expires in ~10 minutes; docs/AUDIO_BLOCKS_API.md).
+export const getAudioBlockPlaybackUrl = async (
+  blockId: string | number
+): Promise<{ playback_url: string; expires_at: string }> => {
+  const response = await api.get<
+    ApiResponse<{ playback_url: string; expires_at: string }>
+  >(`/student/mini-lesson-blocks/${blockId}/audio-url`);
+
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message || "Failed to load audio");
+  }
+
+  return response.data.data;
+};
