@@ -2,9 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { MiniLessonRenderer } from "./MiniLessonRenderer";
 import type { MiniLesson, MiniLessonBlock } from "../../types/lesson";
+
 // The guide's examples are the contract for what authors (and AI tools) send
 // us, so render them through the real component rather than trusting the docs.
-import guide from "../../../docs/LATEX_FORMULA_GUIDE.md?raw";
+// docs/ is gitignored, so a fresh clone (or the deploy) has no guide: load it
+// optionally via a glob and skip the guide-driven tests, rather than letting a
+// missing file fail the whole test file.
+const guide: string =
+  Object.values(
+    import.meta.glob<string>("../../../docs/LATEX_FORMULA_GUIDE.md", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    })
+  )[0] ?? "";
 
 vi.mock("../../services/lessons", () => ({
   getAudioBlockPlaybackUrl: vi.fn(),
@@ -35,21 +46,26 @@ const goodExamples = [
   ...guide.matchAll(/^```latex[ \t]*\r?\n([\s\S]*?)^```/gm),
 ].map((m) => m[1].trim());
 
-describe("MiniLessonRenderer — formula blocks (docs/LATEX_FORMULA_GUIDE.md)", () => {
-  it("finds the guide's examples (guards against this suite passing vacuously)", () => {
-    expect(goodExamples.length).toBeGreaterThanOrEqual(15);
-  });
+describe.skipIf(!guide)(
+  "MiniLessonRenderer — examples in docs/LATEX_FORMULA_GUIDE.md",
+  () => {
+    it("finds the guide's examples (guards against this suite passing vacuously)", () => {
+      expect(goodExamples.length).toBeGreaterThanOrEqual(15);
+    });
 
-  it.each(goodExamples.map((src) => [src.split("\n")[0], src]))(
-    "renders %s as math, with no KaTeX error",
-    (_label, src) => {
-      const { container } = renderFormula(src);
+    it.each(goodExamples.map((src) => [src.split("\n")[0], src]))(
+      "renders %s as math, with no KaTeX error",
+      (_label, src) => {
+        const { container } = renderFormula(src);
 
-      expect(container.querySelector(".katex")).not.toBeNull();
-      expect(container.querySelector(".katex-error")).toBeNull();
-    }
-  );
+        expect(container.querySelector(".katex")).not.toBeNull();
+        expect(container.querySelector(".katex-error")).toBeNull();
+      }
+    );
+  }
+);
 
+describe("MiniLessonRenderer — formula blocks", () => {
   it("shows the raw source as an error when the content is wrapped in \\[ \\] delimiters", () => {
     const { container } = renderFormula("\\[ W = QV \\]");
 

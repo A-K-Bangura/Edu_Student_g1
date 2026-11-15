@@ -133,31 +133,12 @@ const TextBlock = ({
       // \boxed borders) in currentColor, and without this it inherits the
       // light-theme :root colour (#213547) — ~1.3:1 on the dark background.
       return (
-<<<<<<< Updated upstream
-        <div
-          className="overflow-x-auto rounded bg-gray-50 dark:bg-gray-800/60 px-4 py-3"
-=======
-<<<<<<< Updated upstream
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-          <div
-            className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 px-4 py-3"
-            role="math"
-            aria-label="Formula"
-            dangerouslySetInnerHTML={{ __html: renderedFormula }}
-          />
-        </div>
-=======
         <div
           className="overflow-x-auto rounded bg-gray-50 dark:bg-gray-800/60 px-4 py-3 text-gray-900 dark:text-gray-100"
->>>>>>> Stashed changes
           role="math"
           aria-label="Formula"
           dangerouslySetInnerHTML={{ __html: renderedFormula }}
         />
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
->>>>>>> Stashed changes
       );
     } catch {
       return (
