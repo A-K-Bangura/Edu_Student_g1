@@ -1,0 +1,88 @@
+# Frontend API Changes — Student App
+
+**Purpose of this file**: a focused changelog of backend changes that affect the **shape** of requests/responses the Student frontend talks to (new fields, removed fields, renamed fields, changed meanings, new/removed endpoints, changed status codes). Use it to find *what* changed and *where* to look in the frontend; use `STUDENT_API_PAYLOADS.md` (given to you alongside this file) for the full current request/response reference for any endpoint mentioned here.
+
+This is not a full API reference — it deliberately only lists what's different from before. If an endpoint isn't mentioned here, its request/response shape hasn't changed.
+
+Fourteen rounds of backend changes are covered (the bodies of the older rounds that have already been implemented may have been removed from this file):
+- **Round 14** — **Audio content blocks**: mini-lessons can now contain voice-note recordings (record or upload, server-verified, max 10 minutes), played through one new short-lived, authorised playback endpoint — audio follows the same free/paid gating as the rest of a course's content (most recent; needs the `2026_11_13_000001`/`000002` migrations; one new student endpoint, one new block `content_type`, nothing existing changes shape).
+- **Round 1** — systemic error-code/status-code bug fixes (older).
+- **Round 2** — a review pass that fixed organization-affiliation gaps, field-naming inconsistencies, raw-model leaks, and several broken/incomplete endpoints.
+- **Round 3** — guest (no-account) browsing for courses and the feed.
+- **Round 4** — paid courses with Monime checkout (needs the `2026_09_29_*` migrations and Monime env vars set on the backend before it works).
+- **Round 5** — Vybe Coins (needs the `2026_09_30_*` migrations, and an admin must set the exchange rate before students can exchange).
+- **Round 6** — Roadmaps (needs the `2026_10_01_000001`–`000003` migrations, and an admin must create and publish roadmaps before students see any).
+- **Round 7** — Resources (the academic resource library with a daily free allowance and purchasable access packs — needs the `2026_10_01_000004`–`000006` migrations, the file store (R2) configured on the backend, and an admin must set the access pack before students can buy extra accesses).
+- **Round 8** — Opportunities ( a public list of scholarships, internships, jobs, competitions and more, with external apply/register links — needs the `2026_10_02_000001` migration, and tutors/admins must create and an admin must approve opportunities before students see any).
+- **Round 9** — Gigs (small jobs students post and take on — browse publicly, "Interested / contact the creator" records the interest before returning the creator's WhatsApp/email, applicant limits and deadlines decided by the server, ratings and a gig reputation on student profiles, posting gigs as a student — needs the `2026_10_06_000001_create_gigs_tables` migration, and gigs only appear after an admin approves them).
+- **Round 10** — a new `general` level for courses and roadmaps (no migration, no new endpoints — one new value that a course's or roadmap's `level` can now have).
+- **Round 11** — two new lesson text-block types, `link` (render as a clickable link) and `prompt` (render in a copy-friendly box with a Copy button), for courses that teach with AI tools and external sites (needs the `2026_10_17_000001` migration; no new endpoints, one new value of `text_type` on text blocks).
+- **Round 12** — official university **academic modules** ("EEE 101 — Circuit Theory I"): courses can be tagged with one, students can search and filter courses by module name or code, and every course payload gains an `academic_module` object (needs the `2026_10_27_000001` and `2026_10_27_000002` migrations; one new public endpoint, new fields on existing ones).
+- **Round 13** — **Student Help & Guidance**: a "Get help" inquiry that connects the student to an approved UniVybe guide on WhatsApp, and a **new backend source for the existing onboarding links** "Can't find your university / faculty / department?" (most recent; needs the `2026_11_10_000001` migration; three new student endpoints, nothing existing changes shape; **the onboarding links keep using the frontend env number until the app is changed as described below**).
+
+## Round 14 — Audio content blocks (most recent)
+
+Full reference: [`AUDIO_BLOCKS_API.md`](AUDIO_BLOCKS_API.md).
+
+**What changes**
+- Mini-lesson blocks may now have `content_type: "audio"`. It behaves like every other block for ordering/rendering purposes, but `media_url` is always `null` for it — **there is no direct audio URL anywhere in a lesson/mini-lesson payload**, free course or paid. `media_metadata` on an audio block carries `format`, `duration_seconds`, `size_bytes`, `original_filename` and an optional creator-set `title` — enough to render a player UI (duration, title) before playback starts.
+- **New: `GET /student/mini-lesson-blocks/{id}/audio-url`** — the only way to get a playable link. Returns `{ playback_url, expires_at }` after the same enrollment check every other piece of course content already requires (so a paid course's audio needs the same payment/enrollment as its quizzes). `403 NOT_ENROLLED` / `404` / `401` as usual. **Call it fresh every time playback starts** — the link is short-lived (10 minutes) and must not be cached.
+- Player behaviour expected by the backend's rules (nothing to enforce client-side beyond this): never autoplay; no minimum-listening requirement — seeking/skipping never blocks advancing; playback never changes XP, Vybe Coins or lesson/course completion (those endpoints are completely unchanged).
+
+**Not changed:** every existing lesson/mini-lesson/quiz endpoint's shape (an audio block just appears as one more item in `blocks[]`), enrollment, payments, XP, Vybe Coins, course completion.
+
+## Round 13 — Student Help & Guidance
+
+**Why**: students get stuck on questions only a person can answer (admissions, registration, campus, fees) and, during onboarding, when their university, faculty or department is not in the list. UniVybe now keeps a team of approved **guides**, picks the most relevant one for the student, and hands over a WhatsApp link with the message already typed. UniVybe **does not chat, does not send anything and does not know whether the student writes, is answered or is helped** — it only provides the contact. The existing onboarding links use the same service, so one admin-controlled place decides who answers.
+
+**Backend prerequisites**: the `2026_11_10_000001_create_student_guidance_tables` migration (until it is applied the three endpoints below fail with a server error). An admin must **approve guides** and **set the central UniVybe WhatsApp number**; until the number is set, a request no guide can serve answers `503 GUIDANCE_CONTACT_UNAVAILABLE` (handle it: see "Fallback" below).
+
+**Auth**: a normal student token. **A student who has not finished onboarding can use all three endpoints** — they have a token straight after `verify-otp`, and these calls neither check nor change onboarding state or the profile.
+
+- **`GET /student/guidance/options`** — the Get Help form: `categories[]` (`id`, `key`, `slug`, `name`, `description`, `required_context` = the least academic detail that category needs: `none | university | faculty | department`) and `profile_context` = `{university, faculty, department}` from the student's profile (each `{id,name}` or `null`; all `null` before onboarding) to prefill the form. Also `question_max_length`.
+- **`POST /student/guidance/inquiries`** — body `category_id` (required), optional `university_id`, `faculty_id`, `department_id` (a child implies its parents, so a department alone is enough) and optional `question` (≤ 500 characters). **Send none of the three academic fields to use the profile; send any of them and only what you send counts** (so the student can change or clear one for this inquiry). A category that needs more context than was given is `422` with `details.university_id` / `faculty_id` / `department_id` — ask the student for exactly that field; a faculty that is not in the university (a department not in the faculty) is a `422` on the field. `201` for a new contact, **`200` when the same request was answered in the last 10 minutes** (same contact, `routing.is_repeat: true`, nothing new recorded). `429 GUIDANCE_RATE_LIMITED` after 10 new contacts in 24 hours, `403 ACCOUNT_NOT_ACTIVE` for a suspended student, `503 GUIDANCE_CONTACT_UNAVAILABLE` when no guide fits and no central number is set.
+- **`POST /student/guidance/onboarding-help`** — body `issue`: `"university"` | `"faculty"` | `"department"` (which link was clicked) plus whatever the student has selected so far on the onboarding form: `university_id`, `faculty_id` (both optional). The category is implied by `issue` — **no category, no extra fields, no form**. The record being reported as missing, and anything below it, is ignored even if you send it; an id that no longer exists is dropped instead of failing; with nothing selected the answer is a general guide or the central UniVybe contact. Same response and status codes as above.
+- **Response** (both POSTs): `data.routing` (`id`, `routed_at`, `source` `general|onboarding`, `category`, `context`, `contact_type` `guide|central`, `is_central_fallback`, `is_repeat`) and `data.contact`: `type`, `name` (the guide's name, or "UniVybe Support"), `whatsapp.number` (`+23276123456`), **`whatsapp.url`** (`https://wa.me/23276123456?text=…`, the message already URL-encoded — **open it as it is**: new tab / `window.open` / the platform's URL handler) and `message` (the same text, for apps that build their own button). `data.notice` is a one-line reminder that nothing is sent for the student. Show the guide's `name` if you like, not the number: it is in the link.
+
+### Required frontend change: the onboarding links ("Can't find your university / faculty / department?")
+
+The backend cannot change those links; **until the app calls the new endpoint they keep opening the number in the frontend environment and nothing changes for students.** The change is small and the onboarding UI stays exactly as it is — no new form, modal or page:
+
+1. On click, call `POST /student/guidance/onboarding-help` with `issue` (`university` / `faculty` / `department` for the three links) and the `university_id` / `faculty_id` the student has chosen so far (omit what is not chosen). Use the token the student got from `verify-otp`.
+2. Open `data.contact.whatsapp.url`. That already contains the right number and an appropriate prefilled message.
+3. **If the call fails for any reason — network error, `5xx`, `503 GUIDANCE_CONTACT_UNAVAILABLE`, `429`, a timeout — fall back to what the link does today (the env-configured number with the existing message). Keep that env value and that code path until the new flow has been seen working in production; only then remove it.** Never block onboarding on this call.
+4. Nothing to restore when the student comes back from WhatsApp: the call changed nothing on their profile, so the onboarding form and its progress are exactly as they left them. Clicking the same link again within 10 minutes returns the same contact (`200`).
+
+**Unchanged**: `verify-otp`, `complete-onboarding`, login, the profile, courses, gigs, resources and everything else. No existing field, status code or error changed.
+
+Full reference with example requests and responses: `GUIDANCE_API.md`.
+
+## Round 12 — academic modules on courses
+
+**Why**: students know university modules by name and code ("EEE 101", "Circuit Theory"), not by the title of a bite-sized UniVybe course. Admins now keep an official registry of modules and course creators can optionally tag a course with one, so students can find the course by the module they are studying. A module is only a label on the course: it has nothing to do with the course's own `modules` (the chapters), and it never replaces the course's title.
+
+**Backend prerequisites**: the `2026_10_27_000001_create_academic_modules_table` and `2026_10_27_000002_add_academic_module_id_to_courses_table` migrations. Until they are applied the course list and details fail with a server error (they read the new table). Every existing course simply has no module.
+
+- **New field on every course object: `academic_module`.** In `GET /student/courses`, `GET /student/courses/{course}`, `GET /student/courses/enrolled` (inside `course`), `GET /student/courses/{course}/progress` (inside `progress.course`) and the course objects in search results. It is `null` for a course with no module (most of them), otherwise `{ id, code, title, label, scope, is_active, university, faculty, department }`. Render `label` (`"EEE 101 — Circuit Theory I"`) or `code` and `title` together. `scope` is `"faculty"` (the module is offered to a whole faculty; `department` is `null`) or `"department"`. `is_active: false` means the module was retired: the course keeps showing it, nothing else changes. Treat the key as optional: it is absent from the course cards inside roadmaps and from the dashboard's enrolled-course list.
+- **`GET /student/courses` — `search` now also matches the module.** `?search=EEE 101`, `?search=eee101`, `?search=EEE-101` and `?search=Circuit Theory` return the courses tagged with that module, besides the existing title/description matches. Nothing else about `search` changed.
+- **`GET /student/courses?academic_module_id={id}` — new filter.** Only courses tagged with that module; for a faculty-level module this spans all of the faculty's departments. It combines with `university_id`, `faculty_id`, `department_id`, `level`, `search`, sorting and `page`/`per_page`. An unknown id returns an empty list; a non-integer is a `422` with `details.academic_module_id`.
+- **`GET /student/search/courses` (and the global search) — module-aware too.** `q` matches module title and code, `academic_module_id` is accepted as a filter, and each result has `academic_module`.
+- **New public endpoint to populate a module picker/filter: `GET /api/v1/academic-modules`** (no login). Pass `department_id` (its faculty's modules plus its own), `faculty_id` (faculty-level modules only) or `university_id`; at least one is required, so the whole registry is never downloaded. Optional `scope`, `search`, `per_page` (max 50); standard `data[]` + `meta`. Each item has the same shape as `academic_module` above, so group them by `scope`. Only active modules are listed.
+- **Unchanged**: course titles, `course_code`, pricing and payment gating, enrollment, progress, XP, Vybe Coins, roadmaps, and the course's own `modules` array.
+- **Not in this version**: module-aware roadmap or dashboard payloads, and module matching for a search index (there is none in use).
+
+Full reference: `ACADEMIC_MODULES_API.md`.
+
+## Round 11 — `link` and `prompt` lesson blocks
+
+**Why**: some courses teach students to use AI tools and external sites ("open this tool, paste this prompt"). Tutors can now add two new kinds of text block to a mini-lesson, and the student portal needs to render them properly.
+
+**Backend prerequisites**: the `2026_10_17_000001_add_link_and_prompt_text_types_to_mini_lesson_blocks_table` migration (it only widens a database column; existing blocks are unchanged). No new endpoint, env var or response field.
+
+- **What changed in the response.** In every `blocks[]` array students already receive — `GET /student/lessons/{lesson}/mini-lessons`, `GET /student/mini-lessons/{miniLesson}` and the lesson detail — a text block (`content_type: "text"`) can now have `text_type: "link"` or `text_type: "prompt"` (besides `plain`, `simply_put`, `important`, `remember`, `formula`). Same fields as before; nothing is added or removed.
+- **`link` → a clickable link.** `content` is exactly one absolute `http(s)` URL (the server refuses `javascript:`/`data:`, URLs with a username/password, and anything with spaces). Render `<a href={content} target="_blank" rel="noopener noreferrer">`, make the destination visible (show the URL or at least its host), and open it in a new tab. **Optional label:** a link block may carry `media_metadata: { "label": "Open ChatGPT" }` (it is `null` when there is none — and `media_metadata` is the existing field, nothing new in the payload). If `media_metadata?.label` is present, show it as the link text with the host next to it; otherwise the URL is the link text. Labels are plain single-line text (≤ 100 characters, never containing a web address), but still escape them — never render as HTML. Until your portal reads the label, links just show their URL, so nothing breaks.
+- **`prompt` → easy to copy.** `content` is plain text to paste into an AI tool, and may be long and multi-line, with `<tags>`, `{{placeholders}}`, `[brackets]` and ``` fences. Show it in a monospace box that preserves line breaks and indentation (`white-space: pre-wrap`) with a **Copy** button that copies exactly `content` (`navigator.clipboard.writeText`, with a select-all fallback where the Clipboard API isn't available, such as non-HTTPS pages), and give feedback ("Copied"). **Render it as text, not HTML or Markdown**: escape it, otherwise `<role>…</role>` disappears from what the student copies, and it would be an injection risk.
+- **Be forgiving.** Treat any `text_type` you don't recognise as plain text so a future type never produces an empty block.
+- **Unchanged**: progress, XP, quizzes, enrollment and access rules; blocks of every other type; the `blocks[].content_type` values.
+- **Not in this version**: labels for `prompt` blocks, "opened"/"copied" tracking, link preview cards, per-block "mark as done".
+
