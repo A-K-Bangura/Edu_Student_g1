@@ -12,6 +12,7 @@ import {
   Circle,
   X,
   Coins,
+  Award,
 } from "lucide-react";
 import {
   getCourseDetail,
@@ -20,6 +21,7 @@ import {
   getEnrollmentStatus,
 } from "../services/courses";
 import { deriveCompletedLessonIds } from "../utils/courseProgress";
+import { evaluateCompletion } from "../utils/certificates/data";
 import { formatLevel } from "../utils/roadmap";
 import { requireAuthOrRedirect } from "../utils/guestGuard";
 import { GuestBanner } from "../components/common/GuestBanner";
@@ -106,6 +108,10 @@ export const CourseDetailPage = () => {
     queryFn: () => getCourseProgress(courseId!),
     enabled: !!courseId && (!!course?.is_enrolled || !!course?.progress),
   });
+
+  // Canonical server completion (not the percentage) decides whether a certificate is offered.
+  const hasCertificate =
+    !!courseProgress && evaluateCompletion(courseProgress) === "complete";
 
   const enrollMutation = useMutation({
     mutationFn: () => enrollInCourse(courseId!),
@@ -397,6 +403,19 @@ export const CourseDetailPage = () => {
             >
               <PlayCircle className="w-5 h-5" />
               Continue Learning
+            </button>
+          )}
+
+          {enrollmentState === "enrolled" && hasCertificate && (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`/profile/certificates/${encodeURIComponent(courseId!)}`)
+              }
+              className="mt-3 w-full md:w-auto md:ml-3 min-h-11 px-8 py-3 border-2 border-blue-violet-500 bg-transparent text-blue-violet-400 dark:text-blue-violet-700 hover:bg-blue-violet-900 dark:hover:bg-blue-violet-100 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+            >
+              <Award className="w-5 h-5" />
+              View certificate
             </button>
           )}
         </div>

@@ -1,7 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { AxiosError } from "axios";
 import { MiniLessonRenderer } from "./MiniLessonRenderer";
 import type { MiniLesson, MiniLessonBlock } from "../../types/lesson";
+
+vi.mock("../../services/lessons", () => ({
+  getAudioBlockPlaybackUrl: vi.fn(),
+}));
+
+import { getAudioBlockPlaybackUrl } from "../../services/lessons";
 
 const block = (overrides: Partial<MiniLessonBlock>): MiniLessonBlock => ({
   id: 1,
@@ -161,5 +168,95 @@ describe("MiniLessonRenderer — forgiving fallback", () => {
     );
 
     expect(screen.getByText("Some future block type's text.")).toBeInTheDocument();
+  });
+});
+
+describe("MiniLessonRenderer — audio blocks", () => {
+  const axiosError = (code: string, status = 403): AxiosError =>
+    ({
+      response: {
+        status,
+        data: { success: false, error: { code, message: "error" } },
+      },
+    }) as unknown as AxiosError;
+
+  beforeEach(() => {
+    vi.mocked(getAudioBlockPlaybackUrl).mockReset();
+  });
+
+  it("shows the title and duration from media_metadata without fetching a link, and never autoplays", () => {
+    render(
+      <MiniLessonRenderer
+        miniLesson={miniLesson([
+          block({
+            id: 30,
+            content_type: "audio",
+            media_metadata: {
+              title: "Week 1: why limits matter",
+              duration_seconds: 47,
+              format: "m4a",
+            },
+          }),
+        ])}
+      />
+    );
+
+    expect(screen.getByText("Week 1: why limits matter")).toBeInTheDocument();
+    expect(screen.getByText("0:47 · M4A")).toBeInTheDocument();
+    expect(getAudioBlockPlaybackUrl).not.toHaveBeenCalled();
+    expect(document.querySelector("audio")).not.toBeInTheDocument();
+  });
+
+  it("fetches a fresh playback link on Play and renders a native, non-autoplaying-until-loaded player", async () => {
+    vi.mocked(getAudioBlockPlaybackUrl).mockResolvedValue({
+      playback_url: "https://audio-bucket.example.com/signed?x=1",
+      expires_at: "2026-11-13T10:40:00+00:00",
+    });
+
+    render(
+      <MiniLessonRenderer
+        miniLesson={miniLesson([
+          block({ id: 31, content_type: "audio", media_metadata: null }),
+        ])}
+      />
+    );
+
+    expect(screen.getByText("Audio")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /play/i }));
+
+    await waitFor(() =>
+      expect(getAudioBlockPlaybackUrl).toHaveBeenCalledWith(31)
+    );
+
+    const audio = await screen.findByText(
+      "Your browser does not support the audio tag."
+    );
+    expect(audio.closest("audio")).toHaveAttribute(
+      "src",
+      "https://audio-bucket.example.com/signed?x=1"
+    );
+  });
+
+  it("shows a friendly message when the student isn't enrolled, and still offers to retry", async () => {
+    vi.mocked(getAudioBlockPlaybackUrl).mockRejectedValue(
+      axiosError("NOT_ENROLLED")
+    );
+
+    render(
+      <MiniLessonRenderer
+        miniLesson={miniLesson([
+          block({ id: 32, content_type: "audio", media_metadata: null }),
+        ])}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /play/i }));
+
+    expect(
+      await screen.findByText(
+        "You need to be enrolled in this course to access this content."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /play/i })).toBeInTheDocument();
   });
 });

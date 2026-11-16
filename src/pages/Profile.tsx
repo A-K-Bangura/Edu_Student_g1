@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import { RatingStars } from "../components/gigs/RatingStars";
+import { CertificatesProfileSection } from "../components/certificates/CertificatesProfileSection";
 import {
   User,
   Award,
@@ -633,6 +634,9 @@ export const Profile = () => {
                 </p>
               )}
             </div>
+
+            {/* Certificates: generated in the browser from completed courses */}
+            <CertificatesProfileSection />
 
             {/* Quick links */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">

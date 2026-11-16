@@ -188,6 +188,9 @@ export class ApiError extends Error {
       case "GUIDANCE_CONTACT_UNAVAILABLE":
         return "No guidance contact is available right now. Please try again later.";
 
+      case "NOT_ENROLLED":
+        return "You need to be enrolled in this course to access this content.";
+
       default:
         return this.message || "An error occurred. Please try again.";
     }

@@ -7,6 +7,10 @@ import {
   isOnboardingComplete,
 } from "../utils/onboardingSession";
 import { clearAllOnboardingDrafts } from "../utils/onboardingDraft";
+import {
+  clearCertificateSession,
+  getCertificateAccountScope,
+} from "../utils/certificates/session";
 
 const clearPendingSession = () => {
   localStorage.removeItem("pending_auth_token");
@@ -16,13 +20,20 @@ const clearPendingSession = () => {
 const clearFullSession = () => {
   localStorage.removeItem("auth_token");
   localStorage.removeItem("user");
+  // Certificates carry the student's name: drop prepared files with the session.
+  clearCertificateSession();
 };
 
 /** Make `token`/`user` the one fully signed-in session. */
 const storeFullSession = (token: string, user: User) => {
   clearPendingSession();
+  const previous = getCertificateAccountScope();
   localStorage.setItem("auth_token", token);
   localStorage.setItem("user", JSON.stringify(user));
+  // A different account signing in without a logout must not inherit the last
+  // account's prepared certificates (cleared after the write, so listeners see
+  // the new account).
+  if (previous !== null && previous !== String(user.id)) clearCertificateSession();
 };
 
 /**

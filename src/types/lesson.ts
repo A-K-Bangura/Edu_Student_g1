@@ -12,7 +12,10 @@ export type MiniLessonBlockContentType =
   | "image"
   | "video"
   | "embed"
-  | "document";
+  | "document"
+  /** Round 14: a voice-note recording. `media_url` is always null for it —
+   * see docs/AUDIO_BLOCKS_API.md. Playback goes through a dedicated endpoint. */
+  | "audio";
 
 export type MiniLessonTextType =
   | "plain"

@@ -1,6 +1,6 @@
 import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import { ProtectedRoute } from "./components/common/ProtectedRoute";
@@ -8,6 +8,8 @@ import { OfflineIndicator } from "./components/common/OfflineIndicator";
 import { PageShell } from "./components/layout/PageShell";
 import { useUIStore } from "./store/uiStore";
 import { HomeGate } from "./components/common/HomeGate";
+import { CERTIFICATES_QUERY_KEY } from "./hooks/useCertificateCollection";
+import { subscribeCertificateAccount } from "./utils/certificates/session";
 
 // Lazy load pages for code splitting
 const Dashboard = lazy(() =>
@@ -106,6 +108,14 @@ const ResourcePurchases = lazy(() =>
   }))
 );
 const Help = lazy(() => import("./pages/Help").then((m) => ({ default: m.Help })));
+const CertificatesPage = lazy(() =>
+  import("./pages/CertificatesPage").then((m) => ({ default: m.CertificatesPage }))
+);
+const CertificatePreviewPage = lazy(() =>
+  import("./pages/CertificatePreviewPage").then((m) => ({
+    default: m.CertificatePreviewPage,
+  }))
+);
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -131,6 +141,23 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * Certificates carry a student's name. When the session ends or changes hands,
+ * drop every cached certificate query (they're also keyed per account, so this
+ * is memory hygiene on top of isolation).
+ */
+const CertificateSessionCleanup = () => {
+  const client = useQueryClient();
+  useEffect(
+    () =>
+      subscribeCertificateAccount(() => {
+        client.removeQueries({ queryKey: [CERTIFICATES_QUERY_KEY] });
+      }),
+    [client]
+  );
+  return null;
+};
+
 function App() {
   const darkMode = useUIStore((state) => state.darkMode);
 
@@ -148,6 +175,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <OfflineIndicator />
+          <CertificateSessionCleanup />
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
               {/* Public Routes */}
@@ -295,6 +323,22 @@ function App() {
                 element={
                   <ProtectedRoute requireOnboarding>
                     <Profile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile/certificates"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <CertificatesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile/certificates/:courseId"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <CertificatePreviewPage />
                   </ProtectedRoute>
                 }
               />
