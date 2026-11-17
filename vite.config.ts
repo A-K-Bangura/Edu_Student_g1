@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "vite.svg"],
       manifest: {
-        name: "EduLift Sierra",
-        short_name: "EduLift",
+        name: "UniVybe SL",
+        short_name: "UniVybe",
         description: "PWA learning platform for Sierra Leone",
         theme_color: "#3a86ff",
         background_color: "#ffffff",
