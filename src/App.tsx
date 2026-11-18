@@ -9,6 +9,7 @@ import { InstallPrompt } from "./components/common/InstallPrompt";
 import { PageShell } from "./components/layout/PageShell";
 import { useUIStore } from "./store/uiStore";
 import { HomeGate } from "./components/common/HomeGate";
+import { ReferralCapture } from "./components/common/ReferralCapture";
 import { CERTIFICATES_QUERY_KEY } from "./hooks/useCertificateCollection";
 import { subscribeCertificateAccount } from "./utils/certificates/session";
 
@@ -178,6 +179,7 @@ function App() {
           <OfflineIndicator />
           <InstallPrompt />
           <CertificateSessionCleanup />
+          <ReferralCapture />
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
               {/* Public Routes */}

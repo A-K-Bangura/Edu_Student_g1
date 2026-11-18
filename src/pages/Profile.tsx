@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import { RatingStars } from "../components/gigs/RatingStars";
 import { CertificatesProfileSection } from "../components/certificates/CertificatesProfileSection";
+import { AmbassadorProfileSection } from "../components/referrals/AmbassadorProfileSection";
 import {
   User,
   Award,
@@ -637,6 +638,11 @@ export const Profile = () => {
 
             {/* Certificates: generated in the browser from completed courses */}
             <CertificatesProfileSection />
+
+            {/* Campus Ambassador (Round 15) — appears only for a designated ambassador */}
+            {profile.ambassador && (
+              <AmbassadorProfileSection ambassador={profile.ambassador} />
+            )}
 
             {/* Quick links */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">

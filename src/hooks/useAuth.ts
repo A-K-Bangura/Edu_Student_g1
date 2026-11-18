@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import * as authService from "../services/auth";
 import { isOnboardingComplete } from "../utils/onboardingSession";
+import { clearReferralCapture } from "../utils/referralCapture";
 
 export const useAuth = () => {
   const navigate = useNavigate();
@@ -32,7 +33,13 @@ export const useAuth = () => {
   // Send OTP mutation (used for signup)
   const sendOtpMutation = useMutation({
     mutationFn: authService.sendOtp,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // A stored `?ref=` capture that turned out stale/invalid is reported
+      // back as "ignored" — drop it so a later sign-up attempt doesn't keep
+      // re-sending a link the server already said it won't honour.
+      if (data.referral.status === "ignored") {
+        clearReferralCapture();
+      }
       // Redirect to OTP verification
       navigate("/auth/verify");
     },
@@ -45,6 +52,10 @@ export const useAuth = () => {
   const verifyOtpMutation = useMutation({
     mutationFn: authService.verifyOtp,
     onSuccess: (data) => {
+      // Whatever the outcome (confirmed or none), the referral question is
+      // settled for this device the moment an account is verified.
+      clearReferralCapture();
+
       // Anyone who hasn't finished onboarding (new signups, or a student
       // coming back after an interruption/expired session) resumes it here;
       // the draft is restored by the page. `requires_onboarding` already
