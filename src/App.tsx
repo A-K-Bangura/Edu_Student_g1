@@ -5,9 +5,11 @@ import { useEffect } from "react";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import { ProtectedRoute } from "./components/common/ProtectedRoute";
 import { OfflineIndicator } from "./components/common/OfflineIndicator";
+import { InstallPrompt } from "./components/common/InstallPrompt";
 import { PageShell } from "./components/layout/PageShell";
 import { useUIStore } from "./store/uiStore";
 import { HomeGate } from "./components/common/HomeGate";
+import { ReferralCapture } from "./components/common/ReferralCapture";
 import { CERTIFICATES_QUERY_KEY } from "./hooks/useCertificateCollection";
 import { subscribeCertificateAccount } from "./utils/certificates/session";
 
@@ -175,7 +177,9 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <OfflineIndicator />
+          <InstallPrompt />
           <CertificateSessionCleanup />
+          <ReferralCapture />
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
               {/* Public Routes */}
