@@ -14,6 +14,7 @@ import {
 } from "../components/roadmap/RoadmapGrid";
 import { getRoadmaps } from "../services/roadmaps";
 import { isAuthenticated } from "../services/auth";
+import { useMyRoadmaps } from "../hooks/useMyRoadmaps";
 import {
   getDepartments,
   getFaculties,
@@ -144,11 +145,8 @@ export const Roadmaps = () => {
     enabled: !isFiltering,
   });
 
-  const mineQuery = useQuery({
-    queryKey: ["roadmaps", "mine", signedIn],
-    queryFn: () => getRoadmaps({ participating: true, per_page: 50 }),
-    enabled: signedIn && !isFiltering,
-  });
+  // Shared with the dashboard's "My Roadmaps" (same query, same cache entry).
+  const mineQuery = useMyRoadmaps({ enabled: !isFiltering });
 
   // General roadmaps (Round 10): level is exact-match, so the level filter
   // above never surfaces `general` roadmaps on its own — this row fetches

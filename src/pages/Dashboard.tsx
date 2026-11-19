@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import { StatCard } from "../components/common/StatCard";
 import { CourseCard } from "../components/course/CourseCard";
+import { MyRoadmapsSection } from "../components/dashboard/MyRoadmapsSection";
 import { Mascot } from "../components/common/Mascot";
 import {
   Trophy,
@@ -178,6 +179,9 @@ export const Dashboard = () => {
             </p>
           </button>
         </div>
+
+        {/* My Roadmaps — only when at least one is in progress */}
+        <MyRoadmapsSection />
 
         {/* Continue Learning */}
         {inProgressCourse && (
