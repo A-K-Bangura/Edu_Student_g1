@@ -1,4 +1,11 @@
-import { useState, useEffect, useMemo, type ReactNode } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from "react";
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CertificateCelebrationAction } from "../components/certificates/CertificateCelebrationAction";
@@ -29,6 +36,7 @@ import {
 } from "../services/courses";
 import { getUserProfile } from "../services/profile";
 import { useUIStore } from "../store/uiStore";
+import { useSwipeTabs } from "../hooks/useSwipeTabs";
 import { debugLog } from "../utils/debug";
 import { OfflineQueuedError } from "../utils/db";
 import {
@@ -98,6 +106,7 @@ export const CoursePlayer = () => {
     roadmapsCompleted?: RoadmapCompletedEvent[];
   } | null>(null);
   const [inspirationMessage, setInspirationMessage] = useState("");
+  const contentScrollRef = useRef<HTMLDivElement>(null);
 
   const navigationState = useMemo(() => {
     return (
@@ -446,6 +455,27 @@ export const CoursePlayer = () => {
       ? "Lesson Completed"
       : "Complete Lesson"
     : "Next";
+
+  // Swipe left/right between screens (touch only; the buttons stay). Going
+  // back is always allowed; going forward obeys the Next button's lock, so an
+  // unanswered quiz can't be swiped past. Swiping left on the last screen does
+  // nothing: finishing a lesson stays an explicit tap on Complete.
+  const { containerProps: swipeProps, isDragging: isSwiping } = useSwipeTabs({
+    tabCount: totalScreens,
+    activeIndex: currentScreenIndex,
+    onCommit: (nextIndex) => {
+      debugLog("CoursePlayer", "Screen changed", {
+        direction: "swipe",
+        from: currentScreenIndex,
+        to: nextIndex,
+      });
+      setCurrentScreenIndex(nextIndex);
+    },
+    canGoTo: (nextIndex) => nextIndex < currentScreenIndex || !isQuizNextLocked,
+    // The mobile outline drawer has no backdrop, so lesson content stays
+    // touchable beside it — don't page the lesson from behind an open drawer.
+    disabled: totalScreens < 2 || isSidebarOpen,
+  });
 
   // Check if current lesson is the last lesson in the last module (course completion)
   const isLastLessonInCourse = useMemo(() => {
@@ -1228,6 +1258,16 @@ export const CoursePlayer = () => {
     }
   }, [lessonContent?.id]);
 
+  // Every screen renders into the same scroll container, so its offset would
+  // otherwise carry over: leaving a long screen would open the next one
+  // part-way down. A layout effect resets it before paint, so the new screen
+  // is never shown at the old offset.
+  useLayoutEffect(() => {
+    if (contentScrollRef.current) {
+      contentScrollRef.current.scrollTop = 0;
+    }
+  }, [currentScreenIndex, lessonContent?.id]);
+
   const handleToggleNotes = () => {
     setIsNotesOpen((prev) => {
       const next = !prev;
@@ -1387,7 +1427,16 @@ export const CoursePlayer = () => {
           )}
 
           {/* Mini-Lesson and Quiz Content */}
-          <div className="flex-1 overflow-y-auto overscroll-contain bg-white dark:bg-gray-900 px-4 py-4 md:px-8 md:py-8">
+          <div
+            ref={contentScrollRef}
+            {...swipeProps}
+            // The hook sets `pan-y`, which would also switch off pinch-zoom —
+            // students need to be able to zoom lesson text and diagrams.
+            style={{ ...swipeProps.style, touchAction: "pan-y pinch-zoom" }}
+            className={`flex-1 overflow-y-auto overscroll-contain bg-white dark:bg-gray-900 px-4 py-4 md:px-8 md:py-8${
+              isSwiping ? " will-change-transform" : ""
+            }`}
+          >
             <div className="max-w-3xl mx-auto space-y-6 pb-6">
               {currentScreen ? (
                 currentScreen.kind === "mini" ? (

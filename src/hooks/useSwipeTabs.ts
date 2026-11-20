@@ -9,15 +9,45 @@ const SETTLE_MS = 220;
 const REDUCED_MOTION_MS = 100;
 
 const IGNORE_SELECTOR =
-  'input, textarea, select, [role="slider"], video, [data-no-swipe], [role="dialog"]';
+  'input, textarea, select, audio, [role="slider"], video, [data-no-swipe], [role="dialog"]';
+
+const allowAnyTarget = () => true;
+
+/**
+ * True when the gesture starts inside a box that scrolls sideways (a wide
+ * formula, table or code block): that box owns the swipe, not the pager.
+ * `container` itself is excluded — it's the pager.
+ */
+const startsInHorizontalScroller = (
+  target: HTMLElement,
+  container: HTMLElement
+): boolean => {
+  for (
+    let el: HTMLElement | null = target;
+    el && el !== container;
+    el = el.parentElement
+  ) {
+    if (el.scrollWidth > el.clientWidth) {
+      const { overflowX } = window.getComputedStyle(el);
+      if (overflowX === "auto" || overflowX === "scroll") return true;
+    }
+  }
+  return false;
+};
 
 interface UseSwipeTabsOptions {
-  /** Ordered tab keys, e.g. ["feed","opportunities","gigs"]. */
+  /** Number of panels, e.g. 3 for Feed/Opportunities/Gigs. */
   tabCount: number;
   activeIndex: number;
   /** Called once a swipe commits to a new tab (caller navigates with `{replace:true}`). */
   onCommit: (nextIndex: number) => void;
   disabled?: boolean;
+  /**
+   * Vetoes a destination (beyond the first/last edges, which are always
+   * refused). A vetoed swipe resists like an edge and snaps back, rather than
+   * sliding away and then jumping back when `onCommit` declines.
+   */
+  canGoTo?: (nextIndex: number) => boolean;
 }
 
 interface UseSwipeTabsResult {
@@ -33,8 +63,9 @@ interface UseSwipeTabsResult {
 }
 
 /**
- * Touch-only horizontal swipe between the Feed/Opportunities/Gigs discovery
- * tabs. Pointer Events (filtered to `pointerType === "touch"`) rather than
+ * Touch-only horizontal swipe between an ordered set of panels: the
+ * Feed/Opportunities/Gigs discovery tabs, and the screens of a lesson in the
+ * course player. Pointer Events (filtered to `pointerType === "touch"`) rather than
  * raw Touch Events — one listener set, and mouse/trackpad drag is never
  * armed since the guide only asks for touch-device swipe (tap/keyboard are
  * handled separately, by the tablist itself, not this hook).
@@ -50,6 +81,7 @@ export const useSwipeTabs = ({
   activeIndex,
   onCommit,
   disabled = false,
+  canGoTo = allowAnyTarget,
 }: UseSwipeTabsOptions): UseSwipeTabsResult => {
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const [dragOffsetPx, setDragOffsetPx] = useState(0);
@@ -80,18 +112,46 @@ export const useSwipeTabs = ({
     setIsDragging(false);
   }, []);
 
+  const settleTo = useCallback(
+    (target: number, after: () => void) => {
+      setSettling(true);
+      setDragOffsetPx(target);
+      const duration = prefersReducedMotion ? REDUCED_MOTION_MS : SETTLE_MS;
+      window.setTimeout(() => {
+        setSettling(false);
+        setDragOffsetPx(0);
+        after();
+      }, duration);
+    },
+    [prefersReducedMotion]
+  );
+
+  const cancelGesture = useCallback(() => {
+    const wasArmed = state.current.armed;
+    reset();
+    if (wasArmed) settleTo(0, () => {});
+  }, [reset, settleTo]);
+
   const onPointerDown = useCallback(
     (event: React.PointerEvent) => {
       if (disabled || event.pointerType !== "touch") return;
+      if (!event.isPrimary) {
+        // A second finger is a pinch, not a swipe: drop whatever the first
+        // finger had started rather than let the pair commit a page change.
+        cancelGesture();
+        return;
+      }
       const target = event.target as HTMLElement;
       if (target.closest(IGNORE_SELECTOR)) return;
+
+      const container = event.currentTarget as HTMLElement;
+      if (startsInHorizontalScroller(target, container)) return;
 
       const viewportWidth = window.innerWidth;
       if (event.clientX < EDGE_GUARD_PX || event.clientX > viewportWidth - EDGE_GUARD_PX) {
         return; // leave room for the browser's own edge-back gesture
       }
 
-      const container = event.currentTarget as HTMLElement;
       state.current = {
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -101,7 +161,7 @@ export const useSwipeTabs = ({
         containerWidth: container.offsetWidth || viewportWidth,
       };
     },
-    [disabled]
+    [disabled, cancelGesture]
   );
 
   const onPointerMove = useCallback(
@@ -120,26 +180,14 @@ export const useSwipeTabs = ({
 
       event.preventDefault();
 
-      const atStart = activeIndex === 0 && dx > 0;
-      const atEnd = activeIndex === tabCount - 1 && dx < 0;
-      const rubberBanded = atStart || atEnd ? dx * 0.35 : dx;
-      setDragOffsetPx(prefersReducedMotion ? 0 : rubberBanded);
+      // Resist (rubber-band) when there is nowhere to go: past either edge, or
+      // to a destination the caller has vetoed.
+      const destination = activeIndex + (dx < 0 ? 1 : -1);
+      const blocked =
+        destination < 0 || destination > tabCount - 1 || !canGoTo(destination);
+      setDragOffsetPx(prefersReducedMotion ? 0 : blocked ? dx * 0.35 : dx);
     },
-    [activeIndex, tabCount, prefersReducedMotion]
-  );
-
-  const settleTo = useCallback(
-    (target: number, after: () => void) => {
-      setSettling(true);
-      setDragOffsetPx(target);
-      const duration = prefersReducedMotion ? REDUCED_MOTION_MS : SETTLE_MS;
-      window.setTimeout(() => {
-        setSettling(false);
-        setDragOffsetPx(0);
-        after();
-      }, duration);
-    },
-    [prefersReducedMotion]
+    [activeIndex, tabCount, canGoTo, prefersReducedMotion]
   );
 
   const onPointerUp = useCallback(
@@ -164,24 +212,23 @@ export const useSwipeTabs = ({
       const direction = dx < 0 ? 1 : -1; // left swipe -> next tab
       const nextIndex = Math.min(tabCount - 1, Math.max(0, activeIndex + direction));
 
-      if (nextIndex === activeIndex) {
-        settleTo(0, () => {}); // already at an edge — snap back, no navigation
+      if (nextIndex === activeIndex || !canGoTo(nextIndex)) {
+        // At an edge, or the caller vetoed this destination — snap back, no navigation.
+        settleTo(0, () => {});
         return;
       }
 
       justDraggedRef.current = true;
       settleTo(direction * state.current.containerWidth, () => {
+        // A touch drag normally produces no click at all. If none arrived by
+        // now, the flag would otherwise sit there and swallow the student's
+        // next real tap (e.g. the first answer tapped on a quiz screen).
+        justDraggedRef.current = false;
         onCommit(nextIndex);
       });
     },
-    [activeIndex, tabCount, onCommit, reset, settleTo]
+    [activeIndex, tabCount, canGoTo, onCommit, reset, settleTo]
   );
-
-  const onPointerCancel = useCallback(() => {
-    const wasArmed = state.current.armed;
-    reset();
-    if (wasArmed) settleTo(0, () => {});
-  }, [reset, settleTo]);
 
   // Swallows only the one synthetic click that immediately follows a
   // recognized drag release, so a card underneath the finger doesn't
@@ -201,7 +248,7 @@ export const useSwipeTabs = ({
       onPointerDown,
       onPointerMove,
       onPointerUp,
-      onPointerCancel,
+      onPointerCancel: cancelGesture,
       onClickCapture,
       style: {
         touchAction: "pan-y",

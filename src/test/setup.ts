@@ -27,6 +27,23 @@ if (typeof Element.prototype.scrollIntoView !== "function") {
   Element.prototype.scrollIntoView = () => {};
 }
 
+// jsdom has no PointerEvent. Swipe handling reads pointerId / pointerType /
+// isPrimary off it, so without this those are undefined on every test event.
+if (typeof window.PointerEvent !== "function") {
+  class PointerEventPolyfill extends MouseEvent {
+    pointerId: number;
+    pointerType: string;
+    isPrimary: boolean;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 1;
+      this.pointerType = init.pointerType ?? "mouse";
+      this.isPrimary = init.isPrimary ?? true;
+    }
+  }
+  window.PointerEvent = PointerEventPolyfill as unknown as typeof PointerEvent;
+}
+
 // `globals` is off in vitest.config.ts, so React Testing Library can't
 // register its own auto-cleanup — unmount rendered trees between tests.
 afterEach(() => {

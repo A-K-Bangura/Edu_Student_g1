@@ -107,7 +107,7 @@ describe("Dashboard — My Roadmaps", () => {
 
     renderDashboard();
 
-    const roadmaps = await screen.findByRole("heading", { name: "My Roadmaps" });
+    const roadmaps = await screen.findByRole("heading", { name: "My Learning Journeys" });
     const continueLearning = await screen.findByRole("heading", {
       name: "Continue Learning",
     });
@@ -134,7 +134,7 @@ describe("Dashboard — My Roadmaps", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "My Courses" })).toBeInTheDocument();
     await waitFor(() => expect(getRoadmaps).toHaveBeenCalled());
-    expect(screen.queryByRole("heading", { name: "My Roadmaps" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "My Learning Journeys" })).toBeNull();
   });
 
   it("still renders the dashboard when the roadmaps request fails", async () => {
@@ -146,6 +146,6 @@ describe("Dashboard — My Roadmaps", () => {
       await screen.findByRole("heading", { name: "My Courses" })
     ).toBeInTheDocument();
     await waitFor(() => expect(getRoadmaps).toHaveBeenCalled());
-    expect(screen.queryByRole("heading", { name: "My Roadmaps" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "My Learning Journeys" })).toBeNull();
   });
 });
