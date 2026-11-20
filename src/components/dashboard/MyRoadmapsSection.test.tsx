@@ -71,7 +71,7 @@ describe("MyRoadmapsSection", () => {
     renderSection();
 
     expect(
-      await screen.findByRole("heading", { name: "My Roadmaps" })
+      await screen.findByRole("heading", { name: "My Learning Journeys" })
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Roadmap 1/ })).toHaveAttribute(
       "href",
@@ -89,7 +89,7 @@ describe("MyRoadmapsSection", () => {
     vi.mocked(getRoadmaps).mockResolvedValue(list([roadmap(1)]));
 
     renderSection();
-    await screen.findByRole("heading", { name: "My Roadmaps" });
+    await screen.findByRole("heading", { name: "My Learning Journeys" });
 
     expect(getRoadmaps).toHaveBeenCalledWith({ participating: true, per_page: 50 });
   });
@@ -100,7 +100,7 @@ describe("MyRoadmapsSection", () => {
     const { container } = renderSection();
 
     await waitFor(() => expect(getRoadmaps).toHaveBeenCalled());
-    expect(screen.queryByRole("heading", { name: "My Roadmaps" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "My Learning Journeys" })).toBeNull();
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -125,7 +125,7 @@ describe("MyRoadmapsSection", () => {
 
     renderSection();
 
-    await screen.findByRole("heading", { name: "My Roadmaps" });
+    await screen.findByRole("heading", { name: "My Learning Journeys" });
     expect(screen.queryByRole("link", { name: /Roadmap 1/ })).toBeNull();
     expect(screen.getByRole("link", { name: /Roadmap 2/ })).toBeInTheDocument();
   });
@@ -155,7 +155,7 @@ describe("MyRoadmapsSection", () => {
 
     renderSection();
 
-    await screen.findByRole("heading", { name: "My Roadmaps" });
+    await screen.findByRole("heading", { name: "My Learning Journeys" });
     expect(screen.getByRole("link", { name: /Roadmap 4/ })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Roadmap 5/ })).toBeNull();
   });

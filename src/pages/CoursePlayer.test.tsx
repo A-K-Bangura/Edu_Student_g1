@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -218,6 +218,252 @@ describe("CoursePlayer — screen-position progress", () => {
       name: "Complete Lesson",
     });
     expect(completeButton).toBeDisabled();
+  });
+});
+
+describe("CoursePlayer — scroll position between screens", () => {
+  // The lesson body is one persistent scroll container that every screen is
+  // rendered into, so its scroll offset used to carry over to the next screen.
+  const scrollAreaOf = (text: string) =>
+    screen.getByText(text).closest(".overflow-y-auto") as HTMLElement;
+
+  it("starts each new screen at the top, going forward, back, and into the quiz", async () => {
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+
+    const area = scrollAreaOf("A fraction represents part of a whole.");
+    const user = userEvent.setup();
+
+    area.scrollTop = 480; // the student has read down the first screen
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await screen.findByText("Fractions are just divided pieces.");
+    // Same element as before — that persistence is what carried the offset over.
+    expect(scrollAreaOf("Fractions are just divided pieces.")).toBe(area);
+    expect(area.scrollTop).toBe(0);
+
+    area.scrollTop = 300;
+    await user.click(screen.getByRole("button", { name: "Previous screen" }));
+    await screen.findByText("A fraction represents part of a whole.");
+    expect(area.scrollTop).toBe(0);
+
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await screen.findByText("Fractions are just divided pieces.");
+    area.scrollTop = 250;
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await screen.findByText("What is 1/2 + 1/2?");
+    expect(area.scrollTop).toBe(0);
+  });
+
+  it("doesn't touch the scroll position while the student stays on a screen", async () => {
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+
+    const area = scrollAreaOf("A fraction represents part of a whole.");
+    area.scrollTop = 120;
+
+    // Re-renders that aren't a screen change (opening/closing the notes panel).
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Toggle notes" }));
+    await user.click(screen.getByRole("button", { name: "Toggle notes" }));
+
+    expect(area.scrollTop).toBe(120);
+  });
+});
+
+describe("CoursePlayer — swiping between screens", () => {
+  const scrollAreaOf = (text: string) =>
+    screen.getByText(text).closest(".overflow-y-auto") as HTMLElement;
+
+  const touch = (
+    el: Element,
+    type: "pointerdown" | "pointermove" | "pointerup",
+    x: number,
+    y = 200
+  ) =>
+    fireEvent(
+      el,
+      new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 1,
+        pointerType: "touch",
+        isPrimary: true,
+        clientX: x,
+        clientY: y,
+      })
+    );
+
+  // A decisive horizontal drag (450px of a 1024px-wide jsdom window).
+  const swipeLeft = (el: Element) => {
+    touch(el, "pointerdown", 700);
+    touch(el, "pointermove", 500);
+    touch(el, "pointermove", 250);
+    touch(el, "pointerup", 250);
+  };
+  const swipeRight = (el: Element) => {
+    touch(el, "pointerdown", 250);
+    touch(el, "pointermove", 450);
+    touch(el, "pointermove", 700);
+    touch(el, "pointerup", 700);
+  };
+
+  // Lets the 220ms settle animation finish, for asserting that nothing moved.
+  const settle = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+
+  const progressBar = () =>
+    screen.getByRole("progressbar", { name: /lesson progress/i });
+
+  const secondQuiz = {
+    id: 901,
+    quiz_type: "multiple_choice" as const,
+    question: "What is 1/4 + 1/4?",
+    order_index: 1,
+    options: ["1/2", "1", "2"],
+    correct_answer: ["1/2"],
+  };
+
+  it("swipes left to the next screen and right to go back", async () => {
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+    const area = scrollAreaOf("A fraction represents part of a whole.");
+
+    swipeLeft(area);
+    await waitFor(() => expect(progressBar()).toHaveAttribute("aria-valuenow", "2"));
+    expect(screen.getByText("Fractions are just divided pieces.")).toBeInTheDocument();
+
+    swipeRight(area);
+    await waitFor(() => expect(progressBar()).toHaveAttribute("aria-valuenow", "1"));
+    expect(screen.getByText("A fraction represents part of a whole.")).toBeInTheDocument();
+  });
+
+  it("opens the screen it swipes to at the top, not where the last one was scrolled", async () => {
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+    const area = scrollAreaOf("A fraction represents part of a whole.");
+
+    area.scrollTop = 400;
+    swipeLeft(area);
+    await screen.findByText("Fractions are just divided pieces.");
+    expect(area.scrollTop).toBe(0);
+  });
+
+  it("does nothing when swiping back on the first screen", async () => {
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+
+    swipeRight(scrollAreaOf("A fraction represents part of a whole."));
+    await settle();
+    expect(progressBar()).toHaveAttribute("aria-valuenow", "1");
+  });
+
+  it("can't be swiped past an unanswered quiz, but can be swiped back, and moves on once it's answered", async () => {
+    vi.mocked(getLessonDetail).mockResolvedValue({
+      ...lessonDetail,
+      quizzes: [...(lessonDetail.quizzes ?? []), secondQuiz],
+    });
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await screen.findByText("What is 1/2 + 1/2?");
+    const area = scrollAreaOf("What is 1/2 + 1/2?");
+    expect(progressBar()).toHaveAttribute("aria-valuenow", "3");
+
+    swipeLeft(area); // quiz 1 is unanswered: same lock as the disabled Next button
+    await settle();
+    expect(progressBar()).toHaveAttribute("aria-valuenow", "3");
+    expect(screen.getByText("What is 1/2 + 1/2?")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "1" }));
+    await user.click(screen.getByRole("button", { name: /submit quiz/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Next screen" })).not.toBeDisabled()
+    );
+
+    swipeLeft(area);
+    await screen.findByText("What is 1/4 + 1/4?");
+    expect(progressBar()).toHaveAttribute("aria-valuenow", "4");
+
+    // ...and going back is never locked.
+    swipeRight(area);
+    await screen.findByText("What is 1/2 + 1/2?");
+  });
+
+  it("can always swipe back from a quiz that hasn't been answered", async () => {
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await screen.findByText("What is 1/2 + 1/2?");
+
+    swipeRight(scrollAreaOf("What is 1/2 + 1/2?"));
+    await waitFor(() => expect(progressBar()).toHaveAttribute("aria-valuenow", "2"));
+  });
+
+  it("never completes the lesson by swiping left on the last screen", async () => {
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await screen.findByText("What is 1/2 + 1/2?");
+    await user.click(screen.getByRole("radio", { name: "1" }));
+    await user.click(screen.getByRole("button", { name: /submit quiz/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Complete Lesson" })).not.toBeDisabled()
+    );
+
+    swipeLeft(scrollAreaOf("What is 1/2 + 1/2?"));
+    await settle();
+
+    expect(updateCourseProgress).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ lesson_id: expect.anything() })
+    );
+    expect(screen.queryByText("Lesson Complete!")).not.toBeInTheDocument();
+    expect(screen.getByText("What is 1/2 + 1/2?")).toBeInTheDocument();
+  });
+
+  it("doesn't page the lesson from behind the open outline drawer", async () => {
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+    const area = scrollAreaOf("A fraction represents part of a whole.");
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Open course outline" }));
+    swipeLeft(area);
+    await settle();
+    expect(progressBar()).toHaveAttribute("aria-valuenow", "1");
+
+    // Both the header toggle and the drawer's own X close it.
+    await user.click(screen.getAllByRole("button", { name: "Close course outline" })[0]);
+    swipeLeft(area);
+    await waitFor(() => expect(progressBar()).toHaveAttribute("aria-valuenow", "2"));
+  });
+
+  it("keeps pinch-zoom available on the lesson body", async () => {
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+
+    const { touchAction } = scrollAreaOf("A fraction represents part of a whole.").style;
+    expect(touchAction).toContain("pan-y");
+    expect(touchAction).toContain("pinch-zoom");
+  });
+
+  it("keeps the Next and Previous buttons working", async () => {
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await waitFor(() => expect(progressBar()).toHaveAttribute("aria-valuenow", "2"));
+    await user.click(screen.getByRole("button", { name: "Previous screen" }));
+    await waitFor(() => expect(progressBar()).toHaveAttribute("aria-valuenow", "1"));
   });
 });
 

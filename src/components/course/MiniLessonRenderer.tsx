@@ -10,6 +10,7 @@ import type {
 import type { ApiResponse } from "../../types";
 import { getAudioBlockPlaybackUrl } from "../../services/lessons";
 import { ApiError } from "../../utils/apiError";
+import { getEmbedSource } from "../../utils/youtubeEmbed";
 import {
   FileText,
   // Image as ImageIcon,
@@ -413,18 +414,29 @@ const VideoBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => (
 );
 
 const EmbedBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => {
-  const url = block.media_url || "";
-  const embedUrl = getYouTubeEmbedUrl(url);
+  const embed = getEmbedSource(block.media_url || "");
 
   return (
     <div>
-      {embedUrl ? (
-        <div className="aspect-video rounded-lg overflow-hidden">
+      {embed ? (
+        <div
+          className={
+            embed.vertical
+              ? // Shorts are 9:16. In a 16:9 box they'd be a thin strip, so size
+                // the player from the viewport height instead: never wider than
+                // the column, never taller than ~75% of the screen.
+                "mx-auto aspect-[9/16] w-[min(100%,42dvh)] rounded-lg overflow-hidden"
+              : "aspect-video rounded-lg overflow-hidden"
+          }
+        >
           <iframe
-            src={embedUrl}
+            src={embed.src}
             title="Embedded content"
             className="w-full! h-full!"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            // YouTube's player needs to be told who is embedding it; this is
+            // the policy its own embed snippet uses.
+            referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
           />
         </div>
@@ -620,29 +632,6 @@ const AudioBlock = ({ block }: { block: MiniLessonBlock }): ReactElement => {
 const miniLessonFallbackAlt = (block: MiniLessonBlock): string =>
   block.content?.slice(0, 120) || "Mini lesson image";
 
-const getYouTubeEmbedUrl = (url: string): string | null => {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname.includes("youtube.com")) {
-      const videoId = parsed.searchParams.get("v");
-      if (videoId) {
-        return `https://www.youtube.com/embed/${videoId}`;
-      }
-    }
-
-    if (parsed.hostname.includes("youtu.be")) {
-      const id = parsed.pathname.replace("/", "");
-      if (id) {
-        return `https://www.youtube.com/embed/${id}`;
-      }
-    }
-  } catch {
-    return null;
-  }
-
-  return url;
-};
-
 export const MiniLessonRenderer = ({ miniLesson }: MiniLessonRendererProps) => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -686,7 +675,12 @@ export const MiniLessonRenderer = ({ miniLesson }: MiniLessonRendererProps) => {
       ))}
 
       {previewImage && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-6">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Image preview"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-6"
+        >
           <button
             type="button"
             onClick={() => setPreviewImage(null)}

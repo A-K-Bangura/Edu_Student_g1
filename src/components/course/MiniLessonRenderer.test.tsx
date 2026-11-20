@@ -152,6 +152,130 @@ describe("MiniLessonRenderer — prompt blocks", () => {
   });
 });
 
+describe("MiniLessonRenderer — embed blocks", () => {
+  const embedBlock = (media_url: string | null, content = "") =>
+    block({ id: 40, content_type: "embed", media_url, content });
+
+  const iframeFor = (container: HTMLElement) =>
+    container.querySelector("iframe") as HTMLIFrameElement | null;
+
+  it("embeds a YouTube Shorts link as the player, not the framing-blocked /shorts/ page", () => {
+    const { container } = render(
+      <MiniLessonRenderer
+        miniLesson={miniLesson([
+          embedBlock("https://youtube.com/shorts/dQw4w9WgXcQ?feature=share"),
+        ])}
+      />
+    );
+
+    expect(iframeFor(container)).toHaveAttribute(
+      "src",
+      "https://www.youtube.com/embed/dQw4w9WgXcQ"
+    );
+    expect(
+      screen.queryByText("Unable to load embedded content.")
+    ).not.toBeInTheDocument();
+  });
+
+  it("gives a Short a portrait (9:16) box and a normal video a landscape (16:9) one", () => {
+    const short = render(
+      <MiniLessonRenderer
+        miniLesson={miniLesson([embedBlock("https://youtube.com/shorts/dQw4w9WgXcQ")])}
+      />
+    );
+    expect(iframeFor(short.container)?.parentElement?.className).toContain(
+      "aspect-[9/16]"
+    );
+    short.unmount();
+
+    const video = render(
+      <MiniLessonRenderer
+        miniLesson={miniLesson([embedBlock("https://youtu.be/dQw4w9WgXcQ")])}
+      />
+    );
+    const box = iframeFor(video.container)?.parentElement;
+    expect(box?.className).toContain("aspect-video");
+    expect(box?.className).not.toContain("9/16");
+  });
+
+  it("still embeds ordinary watch and youtu.be links", () => {
+    for (const url of [
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "https://youtu.be/dQw4w9WgXcQ",
+    ]) {
+      const { container, unmount } = render(
+        <MiniLessonRenderer miniLesson={miniLesson([embedBlock(url)])} />
+      );
+      expect(iframeFor(container)).toHaveAttribute(
+        "src",
+        "https://www.youtube.com/embed/dQw4w9WgXcQ"
+      );
+      unmount();
+    }
+  });
+
+  it("identifies the embedding page to the player", () => {
+    const { container } = render(
+      <MiniLessonRenderer
+        miniLesson={miniLesson([embedBlock("https://youtu.be/dQw4w9WgXcQ")])}
+      />
+    );
+    expect(iframeFor(container)).toHaveAttribute(
+      "referrerpolicy",
+      "strict-origin-when-cross-origin"
+    );
+  });
+
+  it("shows the caption under the player", () => {
+    render(
+      <MiniLessonRenderer
+        miniLesson={miniLesson([
+          embedBlock("https://youtube.com/shorts/dQw4w9WgXcQ", "Watch the worked example"),
+        ])}
+      />
+    );
+    expect(screen.getByText("Watch the worked example")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["no URL", null],
+    ["a javascript: URL", "javascript:alert(1)"],
+    ["a YouTube page with no video", "https://www.youtube.com/@somechannel"],
+  ])("shows the fallback message instead of an iframe for %s", (_label, url) => {
+    const { container } = render(
+      <MiniLessonRenderer miniLesson={miniLesson([embedBlock(url)])} />
+    );
+    expect(iframeFor(container)).toBeNull();
+    expect(screen.getByText("Unable to load embedded content.")).toBeInTheDocument();
+  });
+});
+
+describe("MiniLessonRenderer — image preview", () => {
+  it("opens as a labelled modal dialog (so swipe-to-navigate ignores it) and closes again", () => {
+    render(
+      <MiniLessonRenderer
+        miniLesson={miniLesson([
+          block({
+            id: 41,
+            content_type: "image",
+            media_url: "https://cdn.example.com/diagram.png",
+            content: "A diagram",
+          }),
+        ])}
+      />
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByAltText("A diagram"));
+    const dialog = screen.getByRole("dialog", { name: "Image preview" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
 describe("MiniLessonRenderer — forgiving fallback", () => {
   it("renders an unrecognised text_type as plain text rather than an empty block", () => {
     render(
