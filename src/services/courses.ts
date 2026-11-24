@@ -1,4 +1,5 @@
 import api from "./api";
+import { AxiosError } from "axios";
 import type { ApiResponse, PaginatedResponse } from "../types";
 import type { Course, Enrollment } from "../types/dashboard";
 import type {
@@ -11,6 +12,7 @@ import type {
 import type { CoinsAwarded } from "../types/coins";
 import type { RoadmapCompletedEvent } from "../types/roadmap";
 import { isOnline, isNetworkError, queueOfflineAction } from "../utils/db";
+import { AccessExpiredError } from "../utils/accessExpiredError";
 
 // Get all courses with filters
 export const getCourses = async (
@@ -243,6 +245,12 @@ export const updateCourseProgress = async (
 
     return response.data.data;
   } catch (error) {
+    if (
+      error instanceof AxiosError &&
+      error.response?.data?.error?.code === "ACCESS_EXPIRED"
+    ) {
+      throw new AccessExpiredError(error.response.data.error.message);
+    }
     if (isNetworkError(error)) {
       return queueOfflineAction({ type: actionType, method: "POST", url, payload: data });
     }

@@ -18,6 +18,11 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
   // Determine if course is enrolled (from enrollment prop or course.is_enrolled)
   const isEnrolled = !!enrollment || course.is_enrolled;
 
+  // Round 16: the enrollment/progress row survives a closed academic period,
+  // so `enrollment` stays truthy — read the compact `access` block to tell
+  // "still enrolled" apart from "paid access ended, renew to continue".
+  const accessExpired = !!(course.access?.expired ?? enrollment?.course?.access?.expired);
+
   // Get progress percentage from enrollment or course.progress
   const getProgressPercent = (): number => {
     if (enrollment) {
@@ -66,13 +71,18 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
       enrollment?.last_module_id && enrollment?.last_lesson_id
     );
 
-    const fallbackDestination = isEnrolled
-      ? `/course/${course.uuid}/play`
-      : `/course/${course.uuid}`;
+    // Access ended: go straight to the renewal choice, not back into content
+    // that will just answer 403 ACCESS_EXPIRED.
+    const fallbackDestination = accessExpired
+      ? `/course/${course.uuid}?renew=1`
+      : isEnrolled
+        ? `/course/${course.uuid}/play`
+        : `/course/${course.uuid}`;
 
-    const resolvedDestination = hasSavedSpot
-      ? `/course/${course.uuid}/module/${enrollment?.last_module_id}/lesson/${enrollment?.last_lesson_id}`
-      : fallbackDestination;
+    const resolvedDestination =
+      hasSavedSpot && !accessExpired
+        ? `/course/${course.uuid}/module/${enrollment?.last_module_id}/lesson/${enrollment?.last_lesson_id}`
+        : fallbackDestination;
 
     debugLog("CourseCard", "Course card clicked", {
       source: source || "unknown",
@@ -201,8 +211,14 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
           </div>
         )}
 
-        {/* Status Badge */}
-        {isEnrolled && progressPercent > 0 && progressPercent < 100 && (
+        {/* Status Badge — a completed course keeps its "Completed" badge even
+            if access later ended; it's not something to renew. */}
+        {accessExpired && progressPercent < 100 ? (
+          <div className="mt-3 inline-flex items-center gap-1.5 self-start rounded-full bg-amber-900 px-3 py-1 text-xs font-semibold text-amber-300 dark:bg-amber-100 dark:text-amber-700">
+            Access ended — Renew
+          </div>
+        ) : null}
+        {!accessExpired && isEnrolled && progressPercent > 0 && progressPercent < 100 && (
           <div className="mt-3 inline-block self-start rounded-full bg-azure-900 px-3 py-1 text-xs font-medium text-azure-300 dark:bg-azure-100 dark:text-azure-700">
             In Progress - {Math.round(progressPercent)}%
           </div>
@@ -213,7 +229,7 @@ export const CourseCard = ({ course, enrollment, source }: CourseCardProps) => {
             Completed
           </div>
         )}
-        {isEnrolled && progressPercent === 0 && (
+        {!accessExpired && isEnrolled && progressPercent === 0 && (
           <div className="mt-3 inline-block self-start rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
             Not Started
           </div>

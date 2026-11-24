@@ -1,5 +1,6 @@
 import type { CourseRoadmapRef } from "./roadmap";
 import type { AcademicModule } from "./academicModule";
+import type { AccessBlock } from "./coursePack";
 
 export interface CourseFilters {
   university_id?: number;
@@ -87,7 +88,9 @@ export type EnrollmentState =
   | "available"
   | "payment_pending"
   | "payment_processing"
-  | "enrolled";
+  | "enrolled"
+  /** Round 16: a paid course whose access ended when its academic period closed. */
+  | "access_expired";
 
 export interface EnrollmentStatus {
   state: EnrollmentState;
@@ -97,6 +100,8 @@ export interface EnrollmentStatus {
   currency: string;
   checkout_url: string | null;
   payment: PaymentInfo | null;
+  /** Round 16: gate paid content on `access.has_access`, not on `is_enrolled`. */
+  access?: AccessBlock | null;
 }
 
 export interface CourseDetail {
@@ -125,6 +130,8 @@ export interface CourseDetail {
   roadmaps?: CourseRoadmapRef[];
   /** Round 12: the official university module this course is tagged with, or `null`. */
   academic_module?: AcademicModule | null;
+  /** Round 16: students only; absent on a public (guest) course-detail response. */
+  access?: AccessBlock | null;
   creator?: Instructor;
   university?: {
     id: number;

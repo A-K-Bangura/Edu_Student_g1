@@ -191,6 +191,33 @@ export class ApiError extends Error {
       case "NOT_ENROLLED":
         return "You need to be enrolled in this course to access this content.";
 
+      case "ACCESS_EXPIRED":
+        return "Your access to this course ended when your university's academic period closed. Your progress is saved — renew to continue.";
+
+      case "UNIVERSITY_REQUIRED":
+        return "Add your university to your profile to buy paid access.";
+
+      case "NO_ACTIVE_ACADEMIC_PERIOD": {
+        const validityType = this.details?.validity_type;
+        const kind = validityType === "academic_year" ? "academic year" : "semester";
+        return `Your university doesn't have an open ${kind} for this option yet.`;
+      }
+
+      case "COURSE_NOT_AVAILABLE":
+        return "This course isn't available right now.";
+
+      case "COURSE_NOT_PAID":
+        return "This course is free — no unlock is needed.";
+
+      case "COURSE_NOT_PACK_ELIGIBLE":
+        return "This course can't be unlocked with a Course Pack — buy it individually instead.";
+
+      case "NO_UNLOCKS_AVAILABLE":
+        return "You don't have any unlocks left — buy a Course Pack or this course individually.";
+
+      case "COURSE_PACK_UNAVAILABLE":
+        return "This Course Pack isn't available right now.";
+
       default:
         return this.message || "An error occurred. Please try again.";
     }

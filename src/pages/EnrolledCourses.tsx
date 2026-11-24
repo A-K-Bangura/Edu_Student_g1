@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMemo } from "react";
 import { PageShell } from "../components/layout/PageShell";
 import { CourseCard } from "../components/course/CourseCard";
-import { BookOpen, ArrowLeft, Sparkles, TrendingUp, CheckCircle } from "lucide-react";
+import { BookOpen, ArrowLeft, Sparkles, TrendingUp, CheckCircle, Ticket } from "lucide-react";
 import { getEnrolledCourses } from "../services/dashboard";
 import type { Enrollment } from "../types/dashboard";
 
@@ -95,13 +95,22 @@ export const EnrolledCourses = () => {
                   : "You haven't enrolled in any courses yet"}
               </p>
             </div>
-            <button
-              onClick={() => navigate("/courses")}
-              className="px-4 py-2 bg-azure-500 hover:bg-azure-600 text-white rounded-lg font-semibold transition-colors flex items-center gap-2"
-            >
-              <BookOpen className="w-5 h-5" />
-              Browse Courses
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate("/course-packs")}
+                className="px-4 py-2 border-2 border-azure-500 text-azure-600 dark:text-azure-300 hover:bg-azure-50 dark:hover:bg-azure-900/20 rounded-lg font-semibold transition-colors flex items-center gap-2"
+              >
+                <Ticket className="w-5 h-5" />
+                Course Packs
+              </button>
+              <button
+                onClick={() => navigate("/courses")}
+                className="px-4 py-2 bg-azure-500 hover:bg-azure-600 text-white rounded-lg font-semibold transition-colors flex items-center gap-2"
+              >
+                <BookOpen className="w-5 h-5" />
+                Browse Courses
+              </button>
+            </div>
           </div>
         </div>
 

@@ -25,6 +25,7 @@ import {
   ArrowUpRight,
   ChevronRight,
   HelpCircle,
+  Ticket,
 } from "lucide-react";
 import { getUserProfile, updateProfile } from "../services/profile";
 import { uploadAvatar } from "../services/upload";
@@ -646,6 +647,23 @@ export const Profile = () => {
 
             {/* Quick links */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+              <Link
+                to="/course-packs"
+                className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <div className="bg-gradient-to-br from-azure-500 to-blue-violet-500 p-2.5 rounded-lg shrink-0">
+                  <Ticket className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    Course Packs
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Buy unlocks for paid courses, and see your packs
+                  </p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
+              </Link>
               <Link
                 to="/leaderboard"
                 className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"

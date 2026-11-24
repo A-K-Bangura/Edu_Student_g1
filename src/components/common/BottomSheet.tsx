@@ -13,6 +13,8 @@ interface BottomSheetProps {
   children: ReactNode;
   /** Dark surface, for the immersive roadmap journey. */
   tone?: "light" | "dark";
+  /** Desktop max-width class, e.g. for a wider multi-column dialog. Defaults to `sm:max-w-lg`. */
+  maxWidthClassName?: string;
 }
 
 const FOCUSABLE =
@@ -31,6 +33,7 @@ export const BottomSheet = ({
   footer,
   children,
   tone = "light",
+  maxWidthClassName = "sm:max-w-lg",
 }: BottomSheetProps) => {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -95,7 +98,7 @@ export const BottomSheet = ({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`animate-sheet-up relative z-10 flex max-h-[88svh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl outline-none sm:max-w-lg sm:rounded-3xl ${
+        className={`animate-sheet-up relative z-10 flex max-h-[88svh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl outline-none ${maxWidthClassName} sm:rounded-3xl ${
           dark
             ? "bg-[#12183a] text-white ring-1 ring-white/10"
             : "bg-white text-gray-900 dark:bg-gray-900 dark:text-white"
