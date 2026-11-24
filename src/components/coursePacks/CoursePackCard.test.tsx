@@ -34,17 +34,19 @@ const pack = (overrides: Partial<CoursePack> = {}): CoursePack => ({
 });
 
 describe("CoursePackCard", () => {
-  it("shows the unlock count, struck-through standard price, savings and period", () => {
+  it("shows a % off tag, struck-through standard price, savings (no repeated percent) and period, for an active promotion", () => {
     render(<CoursePackCard pack={pack()} onChoose={vi.fn()} />);
 
-    expect(screen.getByText("3 unlocks")).toBeInTheDocument();
+    // The tag carries the discount percentage, so the savings line omits it.
+    expect(screen.getByText("25% off")).toBeInTheDocument();
+    expect(screen.getByText("3 course unlocks")).toBeInTheDocument();
     expect(screen.getByLabelText("Standard price")).toHaveTextContent("SLE 200.00");
     expect(screen.getByLabelText("Now")).toHaveTextContent("SLE 150.00");
-    expect(screen.getByText(/Save SLE 50\.00 · 25% off/)).toBeInTheDocument();
+    expect(screen.getByText("Save SLE 50.00")).toBeInTheDocument();
     expect(screen.getByText("2026/2027 Semester 1")).toBeInTheDocument();
   });
 
-  it("shows a single price with no promo styling when no promotion applies", () => {
+  it("shows an unlock-count tag and a single price with no promo styling when no promotion applies", () => {
     render(
       <CoursePackCard
         pack={pack({ promo_applied: false, promotion: null })}
@@ -52,8 +54,25 @@ describe("CoursePackCard", () => {
       />
     );
 
+    expect(screen.getByText("3 unlocks")).toBeInTheDocument();
+    expect(screen.getByText("3 course unlocks")).toBeInTheDocument();
     expect(screen.queryByLabelText("Standard price")).not.toBeInTheDocument();
     expect(screen.getByText("SLE 150.00")).toBeInTheDocument();
+  });
+
+  it("falls back to the unlock-count tag instead of a misleading '0% off' for a negligible promotion", () => {
+    render(
+      <CoursePackCard
+        pack={pack({ standard_price: 1000.3, price: 1000 })}
+        onChoose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("3 unlocks")).toBeInTheDocument();
+    expect(screen.queryByText("0% off")).not.toBeInTheDocument();
+    // Still priced/struck through as a promotion, just without the badge.
+    expect(screen.getByLabelText("Standard price")).toHaveTextContent("SLE 1,000.30");
+    expect(screen.getByText(/^Save SLE 0\.30$/)).toBeInTheDocument();
   });
 
   it("calls onChoose when the button is clicked", () => {

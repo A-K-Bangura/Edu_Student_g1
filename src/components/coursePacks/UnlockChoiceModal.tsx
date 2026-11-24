@@ -167,25 +167,29 @@ export const UnlockChoiceModal = ({
 
         {individual?.available && (
           <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">
-              This course only
-            </p>
-            <p className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
-              {individual.currency} {individual.price?.toFixed(2)}
-            </p>
-            {access.validity?.academic_period && (
-              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                {access.validity.academic_period.name}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <p className="shrink-0 text-sm font-semibold text-gray-900 dark:text-white sm:border-r sm:border-gray-200 sm:pr-4 dark:sm:border-gray-700">
+                This course only
               </p>
-            )}
-            <button
-              type="button"
-              onClick={() => enrollMutation.mutate()}
-              disabled={anyMutationPending}
-              className="mt-3 w-full min-h-11 rounded-xl border-2 border-azure-500 px-4 text-sm font-semibold text-azure-600 transition-colors hover:bg-azure-900 disabled:cursor-not-allowed disabled:opacity-60 dark:text-azure-700 dark:hover:bg-azure-100/30"
-            >
-              {enrollMutation.isPending ? "Preparing checkout…" : "Continue with this course"}
-            </button>
+              <div className="flex-1">
+                <p className="text-xl font-bold text-gray-900 dark:text-white">
+                  {individual.currency} {individual.price?.toFixed(2)}
+                </p>
+                {access.validity?.academic_period && (
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {access.validity.academic_period.name}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => enrollMutation.mutate()}
+                disabled={anyMutationPending}
+                className="min-h-11 w-full shrink-0 rounded-xl border-2 border-azure-500 px-5 text-sm font-semibold text-azure-600 transition-colors hover:bg-azure-900 disabled:cursor-not-allowed disabled:opacity-60 dark:text-azure-700 dark:hover:bg-azure-100/30 sm:w-auto"
+              >
+                {enrollMutation.isPending ? "Preparing checkout…" : "Continue with this course"}
+              </button>
+            </div>
             {enrollMutation.isError && (
               <p className="mt-2 text-xs text-red-600 dark:text-red-400">
                 {getErrorMessage(enrollMutation.error)}
