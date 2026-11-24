@@ -8,6 +8,7 @@ import type {
   MiniLessonList,
   MiniLessonDetail,
 } from "../types/lesson";
+import { AccessExpiredError } from "../utils/accessExpiredError";
 
 // Custom error for sequential access
 export class SequentialAccessError extends Error {
@@ -54,6 +55,9 @@ export const getLessonDetail = async (
   } catch (error) {
     if (error instanceof AxiosError && error.response) {
       const apiResponse = error.response.data as ApiResponse;
+      if (apiResponse.error?.code === "ACCESS_EXPIRED") {
+        throw new AccessExpiredError(apiResponse.error.message);
+      }
       if (
         apiResponse.error?.code === "SEQUENTIAL_ACCESS_REQUIRED" ||
         error.response.status === 403
@@ -92,6 +96,9 @@ export const getModuleDetail = async (
   } catch (error) {
     if (error instanceof AxiosError && error.response) {
       const apiResponse = error.response.data as ApiResponse;
+      if (apiResponse.error?.code === "ACCESS_EXPIRED") {
+        throw new AccessExpiredError(apiResponse.error.message);
+      }
       if (
         apiResponse.error?.code === "SEQUENTIAL_ACCESS_REQUIRED" ||
         error.response.status === 403
@@ -130,6 +137,9 @@ export const getModuleLessons = async (
   } catch (error) {
     if (error instanceof AxiosError && error.response) {
       const apiResponse = error.response.data as ApiResponse;
+      if (apiResponse.error?.code === "ACCESS_EXPIRED") {
+        throw new AccessExpiredError(apiResponse.error.message);
+      }
       if (
         apiResponse.error?.code === "SEQUENTIAL_ACCESS_REQUIRED" ||
         error.response.status === 403

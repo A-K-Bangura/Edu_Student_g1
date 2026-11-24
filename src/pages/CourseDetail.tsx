@@ -28,6 +28,7 @@ import { GuestBanner } from "../components/common/GuestBanner";
 import { CourseCover } from "../components/course/CourseCover";
 import { CourseRoadmapLinks } from "../components/roadmap/CourseRoadmapLinks";
 import { CourseResourcesSection } from "../components/resources/CourseResourcesSection";
+import { UnlockChoiceModal } from "../components/coursePacks/UnlockChoiceModal";
 import { invalidateRoadmapQueries } from "../utils/roadmapQueries";
 import { ApiError } from "../utils/apiError";
 import type { EnrollmentState } from "../types/course";
@@ -50,6 +51,11 @@ export const CourseDetailPage = () => {
   const [paymentBanner, setPaymentBanner] = useState<PaymentOutcome | null>(
     null
   );
+
+  // Round 16: Course Packs / academic-period access — "Choose how to
+  // unlock" dialog, opened explicitly (never on page load) or via a
+  // `?renew=1` link from CoursePlayer's "Access ended" screen.
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   const invalidateCourseQueries = () => {
     queryClient.invalidateQueries({ queryKey: ["course-detail", courseId] });
@@ -102,6 +108,24 @@ export const CourseDetailPage = () => {
     enabled: !!courseId,
   });
 
+  // Open the unlock/renew dialog when arriving via `?renew=1` (CoursePlayer's
+  // "Access ended" screen links here) — once the course has loaded, so the
+  // dialog has real access/options data rather than a loading state.
+  useEffect(() => {
+    if (course && searchParams.get("renew") === "1") {
+      setShowUnlockModal(true);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("renew");
+          return next;
+        },
+        { replace: true }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course]);
+
   // Fetch course progress if enrolled to get completion data
   const { data: courseProgress } = useQuery({
     queryKey: ["course-progress", courseId],
@@ -131,14 +155,45 @@ export const CourseDetailPage = () => {
     },
   });
 
-  const handleEnroll = () => {
-    if (!requireAuthOrRedirect(navigate)) return;
-    enrollMutation.mutate();
-  };
-
   const enrollmentState: EnrollmentState =
     course?.enrollment_state ??
     (course?.is_enrolled || course?.progress ? "enrolled" : "available");
+
+  const access = course?.access ?? null;
+
+  // Paid, no access (new or expired): the student must choose how to open
+  // it (individual purchase, a pack, or an owned unlock) before any
+  // mutation runs. Falls back to the pre-Round-16 direct-enroll flow if the
+  // backend hasn't sent an `access` block (e.g. not yet migrated).
+  const needsUnlockChoice =
+    !!course?.is_paid &&
+    !!access &&
+    !access.has_access &&
+    (enrollmentState === "available" || enrollmentState === "access_expired");
+
+  // Has an active entitlement but no enrollment row (e.g. it was deleted) —
+  // the existing enroll endpoint restores it for free, no choice needed.
+  const needsSilentRestore =
+    !!course?.is_paid &&
+    !!access?.has_access &&
+    enrollmentState === "available" &&
+    !course?.is_enrolled &&
+    !course?.progress;
+
+  const handleEnroll = () => {
+    if (!requireAuthOrRedirect(navigate)) return;
+    if (needsUnlockChoice) {
+      setShowUnlockModal(true);
+      return;
+    }
+    enrollMutation.mutate();
+  };
+
+  const handleUnlocked = () => {
+    setShowUnlockModal(false);
+    invalidateCourseQueries();
+    navigate(`/course/${courseId}/play`);
+  };
 
   const enrollButtonLabel = enrollMutation.isPending
     ? "Enrolling..."
@@ -146,9 +201,13 @@ export const CourseDetailPage = () => {
       ? "Continue Payment"
       : enrollmentState === "payment_processing"
         ? "Confirming Payment…"
-        : course?.is_paid && course?.price != null
-          ? `Enroll for ${course.currency || "SLE"} ${course.price.toFixed(2)}`
-          : "Enroll Now";
+        : enrollmentState === "access_expired"
+          ? "Access ended — Renew"
+          : needsSilentRestore
+            ? "Continue Learning"
+            : course?.is_paid && course?.price != null
+              ? `Enroll for ${course.currency || "SLE"} ${course.price.toFixed(2)}`
+              : "Enroll Now";
 
   const enrollErrorRaw = enrollMutation.error;
   const enrollError =
@@ -345,7 +404,13 @@ export const CourseDetailPage = () => {
             </p>
           )}
 
-          {/* Enroll/Continue Button */}
+          {enrollmentState === "access_expired" && (
+            <p className="mb-3 inline-flex items-center gap-1.5 self-start rounded-full bg-amber-900 px-3 py-1 text-xs font-semibold text-amber-300 dark:bg-amber-100 dark:text-amber-700">
+              Access ended
+            </p>
+          )}
+
+          {/* Enroll/Continue/Renew Button */}
           {enrollmentState !== "enrolled" && (
             <button
               onClick={handleEnroll}
@@ -353,7 +418,11 @@ export const CourseDetailPage = () => {
                 enrollMutation.isPending ||
                 enrollmentState === "payment_processing"
               }
-              className="w-full md:w-auto px-8 py-3 bg-azure-500 hover:bg-azure-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+              className={`w-full md:w-auto px-8 py-3 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
+                enrollmentState === "access_expired"
+                  ? "bg-amber-500 hover:bg-amber-600"
+                  : "bg-azure-500 hover:bg-azure-600"
+              }`}
             >
               <PlayCircle className="w-5 h-5" />
               {enrollButtonLabel}
@@ -366,8 +435,8 @@ export const CourseDetailPage = () => {
             </p>
           )}
 
-          {/* Progress */}
-          {enrollmentState === "enrolled" &&
+          {/* Progress — stays visible after access ends; learning history isn't lost */}
+          {(enrollmentState === "enrolled" || enrollmentState === "access_expired") &&
             (course.progress || courseProgress) && (
               <div className="bg-gradient-to-br from-azure-50 to-blue-violet-50 dark:from-azure-900/20 dark:to-blue-violet-900/20 p-6 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
@@ -557,6 +626,17 @@ export const CourseDetailPage = () => {
 
         <CourseResourcesSection courseId={course.id} />
       </div>
+
+      {access && (
+        <UnlockChoiceModal
+          open={showUnlockModal}
+          onClose={() => setShowUnlockModal(false)}
+          courseId={courseId!}
+          courseTitle={course.title}
+          access={access}
+          onUnlocked={handleUnlocked}
+        />
+      )}
     </PageShell>
   );
 };

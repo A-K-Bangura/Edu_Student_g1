@@ -2,6 +2,7 @@ import type { CoinBalance } from "./coins";
 import type { BadgeProgressObject } from "./gamification";
 import type { RoadmapLink } from "./roadmap";
 import type { AcademicModule } from "./academicModule";
+import type { CompactAccess } from "./coursePack";
 
 // Legacy types for backward compatibility
 export interface LegacyDashboardStats {
@@ -263,6 +264,8 @@ export interface Course {
    * cards inside roadmaps and from the dashboard's enrolled-course list.
    */
   academic_module?: AcademicModule | null;
+  /** Round 16: compact paid-access status on `GET /student/courses/enrolled` rows. */
+  access?: CompactAccess | null;
 }
 
 // Enrollment type matching the API response

@@ -86,6 +86,9 @@ const EnrolledCourses = lazy(() =>
     default: m.EnrolledCourses,
   }))
 );
+const CoursePacks = lazy(() =>
+  import("./pages/CoursePacks").then((m) => ({ default: m.CoursePacks }))
+);
 const Landing = lazy(() =>
   import("./pages/Landing").then((m) => ({ default: m.Landing }))
 );
@@ -211,6 +214,16 @@ function App() {
                 element={
                   <ProtectedRoute requireOnboarding>
                     <EnrolledCourses />
+                  </ProtectedRoute>
+                }
+              />
+              {/* Also the Monime return path for Course Pack checkouts
+                  (STUDENT_PORTAL_COURSE_PACKS_RETURN_PATH, default /course-packs) */}
+              <Route
+                path="/course-packs"
+                element={
+                  <ProtectedRoute requireOnboarding>
+                    <CoursePacks />
                   </ProtectedRoute>
                 }
               />

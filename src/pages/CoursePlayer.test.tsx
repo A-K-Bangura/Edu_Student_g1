@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { LessonDetail } from "../types/lesson";
 import type { CourseDetail, CourseProgress } from "../types/course";
 import type { UserProfile } from "../types/profile";
+import { AccessExpiredError } from "../utils/accessExpiredError";
 
 vi.mock("../services/lessons", async () => {
   const actual = await vi.importActual<typeof import("../services/lessons")>(
@@ -601,6 +602,63 @@ describe("CoursePlayer — already-completed quiz", () => {
         expect.objectContaining({ lesson_id: 501, completed: true })
       )
     );
+  });
+});
+
+describe("CoursePlayer — access expired (Round 16)", () => {
+  it("shows a renewal screen instead of the lesson when the content fetch answers ACCESS_EXPIRED", async () => {
+    vi.mocked(getLessonDetail).mockRejectedValue(
+      new AccessExpiredError(
+        "Your access to this course ended when your university's academic period closed."
+      )
+    );
+
+    renderPlayer();
+
+    expect(await screen.findByText("Access ended")).toBeInTheDocument();
+    expect(
+      screen.getByText(/academic period closed/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Renew access" })
+    ).toBeInTheDocument();
+    // Never the (wrong) "Lesson Locked" sequential-access message.
+    expect(screen.queryByText("Lesson Locked")).not.toBeInTheDocument();
+  });
+
+  it("shows the same renewal screen when completing a lesson answers ACCESS_EXPIRED", async () => {
+    // Quiz already completed server-side, so Complete unlocks without a
+    // quiz-progress call — the one updateCourseProgress call this makes is
+    // the lesson-completion POST, which we fail with ACCESS_EXPIRED.
+    vi.mocked(getCourseProgress).mockResolvedValue({
+      ...courseProgress,
+      quizzes_completed: 1,
+    });
+    vi.mocked(updateCourseProgress).mockRejectedValue(
+      new AccessExpiredError("Access ended mid-lesson.")
+    );
+
+    renderPlayer();
+    await screen.findByRole("heading", { name: "Fractions Basics" });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await user.click(screen.getByRole("button", { name: "Next screen" }));
+    await screen.findByText("What is 1/2 + 1/2?");
+
+    await user.click(screen.getByRole("radio", { name: "1" }));
+    await user.click(screen.getByRole("button", { name: /submit quiz/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Complete Lesson" })
+      ).not.toBeDisabled()
+    );
+
+    await user.click(screen.getByRole("button", { name: "Complete Lesson" }));
+
+    expect(await screen.findByText("Access ended")).toBeInTheDocument();
+    expect(screen.getByText("Access ended mid-lesson.")).toBeInTheDocument();
   });
 });
 

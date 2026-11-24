@@ -29,6 +29,7 @@ import {
   Award,
 } from "lucide-react";
 import { getLessonDetail, SequentialAccessError } from "../services/lessons";
+import { AccessExpiredError } from "../utils/accessExpiredError";
 import {
   getCourseDetail,
   getCourseProgress,
@@ -149,6 +150,13 @@ export const CoursePlayer = () => {
     };
   } | null>(null);
 
+  // Round 16: paid access ended with its academic period — distinct from
+  // SequentialAccessError, and shown instead of the generic error/offline
+  // handling for both content fetches and progress writes.
+  const [accessExpiredMessage, setAccessExpiredMessage] = useState<
+    string | null
+  >(null);
+
   // Fetch lesson detail when lesson ID is available
   const {
     data: lessonDetail,
@@ -193,15 +201,22 @@ export const CoursePlayer = () => {
     return isValidInspirationType(prefValue) ? prefValue : DEFAULT_INSPO_TYPE;
   }, [userProfile]);
 
-  // Handle sequential access errors
+  // Handle sequential-access and access-expired errors
   useEffect(() => {
-    if (lessonError instanceof SequentialAccessError) {
+    if (lessonError instanceof AccessExpiredError) {
+      setAccessExpiredMessage(lessonError.message);
+      setSequentialAccessError(null);
+    } else if (lessonError instanceof SequentialAccessError) {
       setSequentialAccessError({
         message: lessonError.message,
         details: lessonError.details,
       });
-    } else if (lessonError) {
+      setAccessExpiredMessage(null);
+    } else {
+      // No error (including a fresh successful fetch after renewing access):
+      // clear both, rather than leaving a stale blocking screen up.
       setSequentialAccessError(null);
+      setAccessExpiredMessage(null);
     }
   }, [lessonError]);
 
@@ -712,6 +727,18 @@ export const CoursePlayer = () => {
           },
         }));
       } catch (progressError) {
+        if (progressError instanceof AccessExpiredError) {
+          setAccessExpiredMessage(progressError.message);
+          setQuizStates((prev) => ({
+            ...prev,
+            [quizId]: {
+              ...prev[quizId],
+              progressStatus: "error",
+              progressError: progressError.message,
+            },
+          }));
+          return;
+        }
         if (progressError instanceof OfflineQueuedError) {
           debugLog("CoursePlayer", "Quiz progress queued offline", { quizId });
           setQuizStates((prev) => ({
@@ -964,6 +991,18 @@ export const CoursePlayer = () => {
         },
       }));
     } catch (error) {
+      if (error instanceof AccessExpiredError) {
+        setAccessExpiredMessage(error.message);
+        setQuizStates((prev) => ({
+          ...prev,
+          [quizId]: {
+            ...prev[quizId],
+            progressStatus: "error",
+            progressError: error.message,
+          },
+        }));
+        return;
+      }
       if (error instanceof OfflineQueuedError) {
         debugLog("CoursePlayer", "Quiz progress retry queued offline", {
           quizId,
@@ -1059,6 +1098,12 @@ export const CoursePlayer = () => {
       setLessonCompletionStatus("success");
       setShowCompletionModal(true);
     } catch (error) {
+      if (error instanceof AccessExpiredError) {
+        setAccessExpiredMessage(error.message);
+        setLessonCompletionStatus("error");
+        setLessonCompletionError(error.message);
+        return;
+      }
       if (error instanceof OfflineQueuedError) {
         setLessonCompletion(null);
         setLessonCompletionStatus("queued");
@@ -1284,6 +1329,52 @@ export const CoursePlayer = () => {
   const currentQuizFeedback = currentQuiz
     ? renderQuizFeedback(currentQuiz.id)
     : null;
+
+  // Show the renewal screen when paid access has ended — before the
+  // sequential-access check, and regardless of which fetch/write surfaced it.
+  if (accessExpiredMessage && !isLoading) {
+    return (
+      <PageShell showTopNav={false} showBottomNav={false}>
+        <div className="flex justify-center items-center h-dvh bg-gray-50 dark:bg-gray-900">
+          <div className="max-w-2xl w-full mx-4">
+            <div className="bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-800 rounded-lg shadow-lg p-8">
+              <div className="flex items-start gap-4">
+                <div className="shrink-0">
+                  <AlertCircle className="w-12 h-12 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                    Access ended
+                  </h2>
+                  <p className="text-gray-700 dark:text-gray-300 mb-4">
+                    {accessExpiredMessage}
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() =>
+                        navigate(`/course/${courseId}?renew=1`, { replace: true })
+                      }
+                      className="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
+                    >
+                      Renew access
+                    </button>
+                    <button
+                      onClick={() =>
+                        navigate(`/course/${courseId}`, { replace: true })
+                      }
+                      className="px-6 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+                    >
+                      Back to Course
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </PageShell>
+    );
+  }
 
   // Show sequential access error if present
   if (sequentialAccessError && !isLoading) {
