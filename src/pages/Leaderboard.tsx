@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageShell } from "../components/layout/PageShell";
 import { RatingStars } from "../components/gigs/RatingStars";
@@ -23,6 +23,11 @@ import {
 import { getCurrentUser } from "../services/auth";
 import { getStudentProfile } from "../services/profile";
 import { formatXP } from "../utils/format";
+import {
+  getDefaultLeaderboardScope,
+  type LeaderboardScope as LeaderboardType,
+} from "../utils/leaderboardScope";
+import { useScrollToTopOnMount } from "../hooks/useScrollToTopOnMount";
 import type {
   LeaderboardData,
   UniversityLeaderboard,
@@ -32,24 +37,41 @@ import type {
   LeaderboardEntry,
 } from "../types/leaderboard";
 
-type LeaderboardType =
-  | "overall"
-  | "university"
-  | "faculty"
-  | "department"
-  | "organization";
-
 export const Leaderboard = () => {
-  const [leaderboardType, setLeaderboardType] =
-    useState<LeaderboardType>("overall");
+  // Always open at the top of the list, whatever offset the previous page left.
+  useScrollToTopOnMount();
+
+  // Get current user to extract university, faculty, department, and organization IDs
+  const currentUser = getCurrentUser();
+
+  // Open on the student's own department (falling back to the next-narrowest
+  // group they have, then overall) rather than on everyone.
+  const [leaderboardType, setLeaderboardType] = useState<LeaderboardType>(() =>
+    getDefaultLeaderboardScope(currentUser)
+  );
+  // On a phone the scope tabs scroll sideways, and the landing tab (usually
+  // Department) can sit past the right edge. Nudge the strip — horizontally
+  // only, so the page's own scroll is untouched — until the selected tab shows.
+  const scopeStripRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const strip = scopeStripRef.current;
+    const active = strip?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!strip || !active) return;
+    const stripBox = strip.getBoundingClientRect();
+    const activeBox = active.getBoundingClientRect();
+    if (activeBox.right > stripBox.right) {
+      strip.scrollLeft += activeBox.right - stripBox.right;
+    } else if (activeBox.left < stripBox.left) {
+      strip.scrollLeft -= stripBox.left - activeBox.left;
+    }
+  }, [leaderboardType]);
+
   const [limit] = useState(50);
   const [selectedStudentId, setSelectedStudentId] = useState<
     string | number | null
   >(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Get current user to extract university, faculty, department, and organization IDs
-  const currentUser = getCurrentUser();
   const universityId = currentUser?.university?.id;
   const facultyId = currentUser?.faculty?.id;
   const departmentId = currentUser?.department?.id;
@@ -158,9 +180,15 @@ export const Leaderboard = () => {
 
         {/* Filters */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 md:p-6 mb-6 md:mb-8 border border-gray-200 dark:border-gray-700">
-          <div className="flex gap-2 overflow-x-auto">
+          <div
+            ref={scopeStripRef}
+            role="group"
+            aria-label="Leaderboard scope"
+            className="flex gap-2 overflow-x-auto"
+          >
             <button
               onClick={() => setLeaderboardType("overall")}
+              aria-pressed={leaderboardType === "overall"}
               className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-medium whitespace-nowrap transition-colors ${
                 leaderboardType === "overall"
                   ? "bg-azure-500 text-white"
@@ -171,6 +199,7 @@ export const Leaderboard = () => {
             </button>
             <button
               onClick={() => setLeaderboardType("university")}
+              aria-pressed={leaderboardType === "university"}
               className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-medium whitespace-nowrap transition-colors ${
                 leaderboardType === "university"
                   ? "bg-azure-500 text-white"
@@ -181,6 +210,7 @@ export const Leaderboard = () => {
             </button>
             <button
               onClick={() => setLeaderboardType("faculty")}
+              aria-pressed={leaderboardType === "faculty"}
               className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-medium whitespace-nowrap transition-colors ${
                 leaderboardType === "faculty"
                   ? "bg-azure-500 text-white"
@@ -191,6 +221,7 @@ export const Leaderboard = () => {
             </button>
             <button
               onClick={() => setLeaderboardType("department")}
+              aria-pressed={leaderboardType === "department"}
               className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-medium whitespace-nowrap transition-colors ${
                 leaderboardType === "department"
                   ? "bg-azure-500 text-white"
@@ -202,6 +233,7 @@ export const Leaderboard = () => {
             {!!organizationId && (
               <button
                 onClick={() => setLeaderboardType("organization")}
+                aria-pressed={leaderboardType === "organization"}
                 className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-medium whitespace-nowrap transition-colors ${
                   leaderboardType === "organization"
                     ? "bg-azure-500 text-white"
@@ -216,21 +248,22 @@ export const Leaderboard = () => {
 
         {/* Current User Card */}
         {userPosition && (
-          <div className="bg-gradient-to-r from-azure-500 to-blue-violet-500 rounded-lg shadow-md p-4 md:p-6 mb-8 text-white">
+          // Gradient starts at azure-400 (not -500): white on azure-500 is only 3.48:1.
+          <div className="bg-gradient-to-r from-azure-400 to-blue-violet-400 rounded-lg shadow-md p-4 md:p-6 mb-8 text-white">
             <h3 className="text-base md:text-lg font-semibold mb-3 md:mb-4 flex items-center gap-2">
               <Users className="w-4 h-4 md:w-5 md:h-5" />
               Your Position
             </h3>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex items-center gap-3 md:gap-4">
-                <div className="w-12 h-12 md:w-16 md:h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-xl md:text-2xl font-bold">
+                <div className="w-12 h-12 md:w-16 md:h-16 bg-black/20 rounded-full flex items-center justify-center text-xl md:text-2xl font-bold">
                   #{userPosition.rank}
                 </div>
                 <div>
                   <p className="font-bold text-base md:text-lg">
                     Rank #{userPosition.rank}
                   </p>
-                  <p className="text-xs md:text-sm text-white text-opacity-80">
+                  <p className="text-xs md:text-sm text-white/95">
                     Top {((1 - userPosition.percentile / 100) * 100).toFixed(1)}
                     %
                   </p>
@@ -241,7 +274,7 @@ export const Leaderboard = () => {
                   <p className="font-bold text-base md:text-lg">
                     {userPosition.rank}
                   </p>
-                  <p className="text-xs md:text-sm text-white text-opacity-80">
+                  <p className="text-xs md:text-sm text-white/95">
                     Rank
                   </p>
                 </div>
@@ -249,7 +282,7 @@ export const Leaderboard = () => {
                   <p className="font-bold text-base md:text-lg">
                     {formatXP(userPosition.xp_total)}
                   </p>
-                  <p className="text-xs md:text-sm text-white text-opacity-80">
+                  <p className="text-xs md:text-sm text-white/95">
                     Total XP
                   </p>
                 </div>
@@ -257,7 +290,7 @@ export const Leaderboard = () => {
                   <p className="font-bold text-base md:text-lg">
                     {userPosition.percentile.toFixed(1)}%
                   </p>
-                  <p className="text-xs md:text-sm text-white text-opacity-80">
+                  <p className="text-xs md:text-sm text-white/95">
                     Percentile
                   </p>
                 </div>

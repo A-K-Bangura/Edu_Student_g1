@@ -26,9 +26,44 @@ export const getUploadPresign = async (
   return response.data.data;
 };
 
+const CLOUDINARY_HOST = "api.cloudinary.com";
+
+/**
+ * Where to POST the file. The current backend returns no `upload_url` (older
+ * ones did), so the endpoint is built from the cloud and resource type, the
+ * same way Cloudinary documents it. A supplied `upload_url` is only honoured
+ * if it is https on Cloudinary's own host: the student's photo is about to be
+ * sent there, and a response must not be able to redirect it elsewhere.
+ */
+export const getCloudinaryUploadUrl = (
+  signatureData: UploadPresignResponse
+): string => {
+  if (signatureData.upload_url) {
+    try {
+      const supplied = new URL(signatureData.upload_url);
+      if (supplied.protocol === "https:" && supplied.hostname === CLOUDINARY_HOST) {
+        return supplied.toString();
+      }
+    } catch {
+      // Not a URL — fall through to the canonical endpoint.
+    }
+  }
+
+  const cloud = encodeURIComponent(signatureData.cloud_name);
+  const resourceType = signatureData.resource_type || "image";
+  return `https://${CLOUDINARY_HOST}/v1_1/${cloud}/${resourceType}/upload`;
+};
+
 /**
  * Step 2: Upload file directly to Cloudinary
  * This is a client-side upload to Cloudinary's API
+ *
+ * Cloudinary re-derives the signature from every parameter it receives (bar
+ * `file`, `api_key`, `cloud_name`, `resource_type`), so the form must carry
+ * exactly the parameters the backend signed: `timestamp` plus `upload_preset`
+ * today. Adding anything unsigned — such as the `folder` the older contract
+ * signed — makes the signatures disagree and the upload is refused with
+ * "Invalid Signature".
  */
 export const uploadToCloudinary = async (
   file: File,
@@ -36,12 +71,17 @@ export const uploadToCloudinary = async (
 ): Promise<CloudinaryUploadResponse> => {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("signature", signatureData.signature);
-  formData.append("timestamp", signatureData.timestamp.toString());
   formData.append("api_key", signatureData.api_key);
-  formData.append("folder", signatureData.folder);
+  formData.append("timestamp", signatureData.timestamp.toString());
+  formData.append("signature", signatureData.signature);
+  if (signatureData.upload_preset) {
+    formData.append("upload_preset", signatureData.upload_preset);
+  } else if (signatureData.folder) {
+    // Older contract: the folder was the signed parameter.
+    formData.append("folder", signatureData.folder);
+  }
 
-  const response = await fetch(signatureData.upload_url, {
+  const response = await fetch(getCloudinaryUploadUrl(signatureData), {
     method: "POST",
     body: formData,
   });
