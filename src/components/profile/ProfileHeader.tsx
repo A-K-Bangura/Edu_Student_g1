@@ -14,7 +14,11 @@ import {
 } from "lucide-react";
 import { AvatarViewer } from "./AvatarViewer";
 import { AVATAR_ACCEPT, useAvatarUpload } from "../../hooks/useAvatarUpload";
-import { formatAcademicLevel, getInitials } from "../../utils/profileDisplay";
+import {
+  formatAcademicLevel,
+  getInitials,
+  getInstitutionName,
+} from "../../utils/profileDisplay";
 import type { UserProfile } from "../../types/profile";
 
 interface ProfileHeaderProps {
@@ -22,14 +26,6 @@ interface ProfileHeaderProps {
   /** XP-tier level from gamification — distinct from the academic year. */
   scoreLevel: number;
 }
-
-// Older API shapes sent a bare string where the current one sends `{ id, name }`.
-const nameOf = (
-  value: { name?: string } | string | null | undefined
-): string | null => {
-  if (!value) return null;
-  return (typeof value === "string" ? value : value.name)?.trim() || null;
-};
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
 
@@ -81,10 +77,10 @@ export const ProfileHeader = ({ profile, scoreLevel }: ProfileHeaderProps) => {
   const academicLevel = formatAcademicLevel(profile.level);
 
   const details: DetailRow[] = [];
-  const university = nameOf(profile.university);
-  const faculty = nameOf(profile.faculty);
-  const department = nameOf(profile.department);
-  const organization = nameOf(profile.organization);
+  const university = getInstitutionName(profile.university);
+  const faculty = getInstitutionName(profile.faculty);
+  const department = getInstitutionName(profile.department);
+  const organization = getInstitutionName(profile.organization);
   if (university) details.push({ label: "University", value: university, icon: Landmark });
   if (faculty) details.push({ label: "Faculty", value: faculty, icon: Library });
   if (department) details.push({ label: "Department", value: department, icon: BookOpen });

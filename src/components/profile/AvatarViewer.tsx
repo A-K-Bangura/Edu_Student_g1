@@ -8,7 +8,8 @@ interface AvatarViewerProps {
   initials: string;
   name: string;
   onClose: () => void;
-  onChangePhoto: () => void;
+  /** Omit for a view-only photo (someone else's); give it to offer "Change photo". */
+  onChangePhoto?: () => void;
   /** Focus goes back here when the viewer closes. */
   returnFocusRef: RefObject<HTMLElement | null>;
 }
@@ -45,6 +46,11 @@ export const AvatarViewer = ({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
+        // This can be opened from inside another modal (a student's profile).
+        // Stopping the event here — in the capture phase, before anything
+        // else sees it — means Escape closes only the photo, not the modal
+        // that is still open behind it.
+        event.stopPropagation();
         onClose();
         return;
       }
@@ -57,15 +63,17 @@ export const AvatarViewer = ({
       const last = focusable[focusable.length - 1];
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
+        event.stopPropagation();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault();
+        event.stopPropagation();
         first.focus();
       }
     };
 
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [onClose]);
 
   return createPortal(
@@ -74,7 +82,7 @@ export const AvatarViewer = ({
       role="dialog"
       aria-modal="true"
       aria-label="Profile photo"
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <button
@@ -107,14 +115,16 @@ export const AvatarViewer = ({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={onChangePhoto}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-azure-300 shadow-lg transition-colors hover:bg-azure-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-        >
-          <Camera className="size-4" aria-hidden />
-          {imageUrl ? "Change photo" : "Add a photo"}
-        </button>
+        {onChangePhoto && (
+          <button
+            type="button"
+            onClick={onChangePhoto}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-azure-300 shadow-lg transition-colors hover:bg-azure-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            <Camera className="size-4" aria-hidden />
+            {imageUrl ? "Change photo" : "Add a photo"}
+          </button>
+        )}
       </div>
     </div>,
     document.body
