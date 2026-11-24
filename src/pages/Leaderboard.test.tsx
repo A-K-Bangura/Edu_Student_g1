@@ -21,6 +21,7 @@ vi.mock("../services/leaderboard", () => ({
 
 import { Leaderboard } from "./Leaderboard";
 import { getCurrentUser } from "../services/auth";
+import { getStudentProfile } from "../services/profile";
 import {
   getLeaderboard,
   getUniversityLeaderboard,
@@ -182,6 +183,105 @@ describe("Leaderboard — which board it opens on", () => {
     renderPage();
     await screen.findByText("Department Learner 1");
     expect(tab("Organization")).toBeInTheDocument();
+  });
+});
+
+describe("Leaderboard — students in the list", () => {
+  const PHOTO = "https://res.cloudinary.com/demo/image/upload/two.jpg";
+
+  const withPhotoOnSecond = () => {
+    const rows = entries("Department");
+    rows[1] = { ...rows[1], student_avatar: PHOTO };
+    vi.mocked(getDepartmentLeaderboard).mockResolvedValue({
+      leaderboard: rows,
+      total_users: rows.length,
+      department: group(7),
+    });
+  };
+
+  const row = (name: string) =>
+    screen.getByText(name).closest('[role="button"]') as HTMLElement;
+
+  it("shows a student's actual photo in the list when they have one, and initials when they don't", async () => {
+    withPhotoOnSecond();
+    renderPage();
+    await screen.findByText("Department Learner 2");
+
+    const photo = row("Department Learner 2").querySelector("img");
+    expect(photo).toHaveAttribute("src", PHOTO);
+    expect(row("Department Learner 1").querySelector("img")).toBeNull();
+    expect(row("Department Learner 1")).toHaveTextContent("D1");
+  });
+
+  it("loads the list's photos lazily, since most rows are off-screen", async () => {
+    withPhotoOnSecond();
+    renderPage();
+    await screen.findByText("Department Learner 2");
+
+    expect(row("Department Learner 2").querySelector("img")).toHaveAttribute("loading", "lazy");
+  });
+
+  it("keeps the initials if a photo fails to load", async () => {
+    withPhotoOnSecond();
+    renderPage();
+    await screen.findByText("Department Learner 2");
+
+    fireEvent.error(row("Department Learner 2").querySelector("img") as HTMLImageElement);
+
+    expect(row("Department Learner 2").querySelector("img")).toBeNull();
+    expect(row("Department Learner 2")).toHaveTextContent("D2");
+  });
+
+  it("opens that student's profile, with their rank, when a row is clicked", async () => {
+    vi.mocked(getStudentProfile).mockResolvedValue({
+      id: "u2",
+      email: "",
+      full_name: "Department Learner 2",
+      bio: "Hello from row two",
+    });
+    renderPage();
+    await screen.findByText("Department Learner 2");
+
+    fireEvent.click(row("Department Learner 2"));
+
+    const dialog = await screen.findByRole("dialog", { name: "Student profile" });
+    expect(within(dialog).getByText("Rank #2")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Hello from row two")).toBeInTheDocument();
+    expect(getStudentProfile).toHaveBeenCalledWith(2);
+  });
+
+  it("is reachable by keyboard: rows are focusable buttons that open on Enter and Space", async () => {
+    vi.mocked(getStudentProfile).mockReturnValue(new Promise(() => {}));
+    renderPage();
+    await screen.findByText("Department Learner 1");
+
+    const first = row("Department Learner 1");
+    expect(first).toHaveAttribute("tabindex", "0");
+    expect(first).toHaveAttribute("aria-haspopup", "dialog");
+
+    fireEvent.keyDown(first, { key: "Enter" });
+    expect(await screen.findByRole("dialog", { name: "Student profile" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Student profile" })).not.toBeInTheDocument()
+    );
+
+    fireEvent.keyDown(row("Department Learner 3"), { key: " " });
+    expect(await screen.findByRole("dialog", { name: "Student profile" })).toBeInTheDocument();
+    expect(getStudentProfile).toHaveBeenLastCalledWith(3);
+  });
+
+  it("closes the profile and goes back to the list", async () => {
+    vi.mocked(getStudentProfile).mockReturnValue(new Promise(() => {}));
+    renderPage();
+    await screen.findByText("Department Learner 1");
+
+    fireEvent.click(row("Department Learner 1"));
+    const dialog = await screen.findByRole("dialog", { name: "Student profile" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByText("Department Learner 1")).toBeInTheDocument();
   });
 });
 

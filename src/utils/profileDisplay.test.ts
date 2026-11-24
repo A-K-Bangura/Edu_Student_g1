@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { formatAcademicLevel, getInitials } from "./profileDisplay";
+import { formatAcademicLevel, getInitials, getInstitutionName } from "./profileDisplay";
+
+describe("getInstitutionName", () => {
+  it("reads the name from the current { id, name } shape", () => {
+    expect(getInstitutionName({ name: "Fourah Bay College" })).toBe("Fourah Bay College");
+  });
+
+  it("accepts the older bare-string shape", () => {
+    expect(getInstitutionName("Njala University")).toBe("Njala University");
+  });
+
+  it("trims, and is null for nothing or a blank name", () => {
+    expect(getInstitutionName({ name: "  Njala  " })).toBe("Njala");
+    expect(getInstitutionName(null)).toBeNull();
+    expect(getInstitutionName(undefined)).toBeNull();
+    expect(getInstitutionName("")).toBeNull();
+    expect(getInstitutionName({ name: "   " })).toBeNull();
+    expect(getInstitutionName({})).toBeNull();
+  });
+});
 
 describe("getInitials", () => {
   it("is the first and last word's initials", () => {

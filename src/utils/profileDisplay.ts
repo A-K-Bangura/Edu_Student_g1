@@ -21,6 +21,18 @@ export const getInitials = (
 };
 
 /**
+ * The display name of a university / faculty / department / organization.
+ * Older API shapes sent a bare string where the current one sends
+ * `{ id, name }`; both are accepted. `null` when there's nothing to show.
+ */
+export const getInstitutionName = (
+  value: { name?: string } | string | null | undefined
+): string | null => {
+  if (!value) return null;
+  return (typeof value === "string" ? value : value.name)?.trim() || null;
+};
+
+/**
  * How a stored academic level reads on screen. The API stores the raw level
  * ("200"), which means second year; a value already written out ("Year 2",
  * "Postgraduate") is shown as it is. Returns `null` when there is none.
