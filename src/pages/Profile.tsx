@@ -28,7 +28,7 @@ import {
   Ticket,
 } from "lucide-react";
 import { getUserProfile, updateProfile } from "../services/profile";
-import { uploadAvatar } from "../services/upload";
+import { ProfileHeader } from "../components/profile/ProfileHeader";
 import {
   getGamificationDashboard,
   getAchievements,
@@ -254,16 +254,6 @@ export const Profile = () => {
     }
   };
 
-  const updateAvatarMutation = useMutation({
-    mutationFn: uploadAvatar,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      // Also update user in localStorage
-      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
-    },
-  });
-
   const handleLogout = () => {
     authLogout();
     queryClient.clear();
@@ -278,38 +268,6 @@ export const Profile = () => {
   const handleLowBandwidthToggle = () => {
     toggleLowBandwidthMode();
     // Note: Low bandwidth mode is now handled by UI store, not API
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type (only jpeg, png, webp allowed for avatars)
-    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    if (!validTypes.includes(file.type)) {
-      alert("Please select a valid image file (JPEG, PNG, or WebP)");
-      return;
-    }
-
-    // Validate file size (max 5MB for Cloudinary upload)
-    const maxSizeBytes = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSizeBytes) {
-      alert("Image size must be less than 5MB");
-      return;
-    }
-
-    // Validate minimum file size
-    if (file.size < 1) {
-      alert("File size must be at least 1 byte");
-      return;
-    }
-
-    try {
-      updateAvatarMutation.mutate(file);
-    } catch (error) {
-      console.error("Avatar upload error:", error);
-      alert("Failed to upload avatar. Please try again.");
-    }
   };
 
   if (isLoading) {
@@ -357,90 +315,12 @@ export const Profile = () => {
     <PageShell>
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Profile Header */}
-        <div className="bg-linear-to-r from-azure-500 to-blue-violet-500 rounded-lg shadow-md p-6 md:p-8 mb-8">
-          <div className="flex flex-col md:flex-row items-center md:items-center gap-6 text-center md:text-left">
-            <div className="relative">
-              {profile.avatar_url ? (
-                <img
-                  src={profile.avatar_url}
-                  alt={profile.full_name || profile.name || "Profile"}
-                  className="w-24 h-24 rounded-full object-cover border-4 border-white border-opacity-30"
-                />
-              ) : (
-                <div className="w-24 h-24 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-4xl font-bold text-white border-4 border-white border-opacity-30">
-                  {(
-                    profile.full_name ||
-                    profile.name ||
-                    profile.firstname ||
-                    profile.email
-                  )
-                    .charAt(0)
-                    .toUpperCase()}
-                </div>
-              )}
-              <label className="absolute bottom-0 right-0 bg-white rounded-full p-2 cursor-pointer hover:bg-gray-100 transition-colors shadow-lg">
-                <Settings className="w-4 h-4 text-gray-700" />
-                <input
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  onChange={handleAvatarUpload}
-                  className="hidden"
-                  disabled={updateAvatarMutation.isPending}
-                />
-              </label>
-              {updateAvatarMutation.isPending && (
-                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
-                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
-            </div>
-            <div className="flex-1 w-full">
-              <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
-                {profile.full_name ||
-                  (profile.firstname && profile.lastname
-                    ? `${profile.firstname} ${profile.lastname}`
-                    : profile.name || profile.email)}
-              </h1>
-              <div className="space-y-1 text-white text-opacity-90">
-                <p className="font-medium">{profile.email}</p>
-                {profile.university && (
-                  <p>
-                    {typeof profile.university === "object"
-                      ? profile.university.name
-                      : profile.university}{" "}
-                    {profile.faculty &&
-                      (typeof profile.faculty === "object"
-                        ? `• ${profile.faculty.name}`
-                        : `• ${profile.faculty}`)}{" "}
-                    {profile.department &&
-                      (typeof profile.department === "object"
-                        ? `• ${profile.department.name}`
-                        : `• ${profile.department}`)}
-                  </p>
-                )}
-                {profile.level && (
-                  <p>
-                    Level:{" "}
-                    {/^\d+$/.test(profile.level)
-                      ? `Year ${parseInt(profile.level, 10) / 100}`
-                      : profile.level}
-                  </p>
-                )}
-                {profile.profile_completion !== undefined && (
-                  <p>Profile Completion: {profile.profile_completion}%</p>
-                )}
-              </div>
-            </div>
-            <div className="text-center md:text-right">
-              <div className="text-white text-5xl md:text-6xl font-bold">
-                {gamificationData?.xp_stats?.score_level ??
-                  profile.score_level ??
-                  0}
-              </div>
-              <div className="text-white text-opacity-80">Level</div>
-            </div>
-          </div>
-        </div>
+        <ProfileHeader
+          profile={profile}
+          scoreLevel={
+            gamificationData?.xp_stats?.score_level ?? profile.score_level ?? 0
+          }
+        />
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 overflow-x-auto border-b border-gray-200 dark:border-gray-700">
@@ -1182,7 +1062,7 @@ export const Profile = () => {
 
         {/* Edit Profile Modal */}
         {isEditModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">

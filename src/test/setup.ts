@@ -21,6 +21,10 @@ if (typeof window.matchMedia !== "function") {
     }) as MediaQueryList;
 }
 
+// jsdom's window.scrollTo only logs "not implemented"; a no-op keeps test
+// output clean and lets tests spy on it (see useScrollToTopOnMount).
+window.scrollTo = (() => {}) as typeof window.scrollTo;
+
 // jsdom doesn't implement scrollIntoView (used by the roadmap journey to jump
 // to a stage / the current course).
 if (typeof Element.prototype.scrollIntoView !== "function") {
